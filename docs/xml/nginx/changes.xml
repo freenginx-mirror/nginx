@@ -7,6 +7,55 @@
 <section title="freenginx">
 
 
+<changes ver="1.27.2" date="2024-07-09">
+
+<change type="feature">
+<para lang="ru">
+теперь максимальная частота логгированиия ошибок может быть ограничена
+с помощью параметра rate директивы error_log;
+по умолчанию используется ограничение в 1000 сообщений в секунду.
+</para>
+<para lang="en">
+now maximum error logging rate can be limited
+with the "rate" parameter of the "error_log" directive;
+by default the limit is 1000 messages per second.
+</para>
+</change>
+
+<change type="bugfix">
+<para lang="ru">
+в resolver'е.<br/>
+Спасибо Кириллу Коринскому.
+</para>
+<para lang="en">
+in resolver.<br/>
+Thanks to Kirill A. Korinsky.
+</para>
+</change>
+
+<change type="bugfix">
+<para lang="ru">
+директива proxy_no_cache не учитывалась при кэшировании ошибок.
+</para>
+<para lang="en">
+the "proxy_no_cache" directive was not checked when caching errors.
+</para>
+</change>
+
+<change type="bugfix">
+<para lang="ru">
+блок, используемый в параметре stub в SSI-директиве include,
+мог быть отправлен дважды.
+</para>
+<para lang="en">
+a block used in the "stub" parameter of the "include" SSI directive
+might be sent twice.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.27.1" date="2024-06-04">
 
 <change type="feature">
