@@ -7,6 +7,55 @@
 <section title="freenginx">
 
 
+<changes ver="1.27.3" date="2024-08-13">
+
+<change type="change">
+<para lang="ru">
+теперь при кэшировании учитывается
+строка "Age" заголовка ответа бэкенда.<br/>
+Спасибо Hiroaki Nakamura.
+</para>
+<para lang="en">
+now the "Age" backend response header line
+is taken into account when caching.<br/>
+Thanks to Hiroaki Nakamura.
+</para>
+</change>
+
+<change type="feature">
+<para lang="ru">
+переменная $upstream_cache_age.
+</para>
+<para lang="en">
+the $upstream_cache_age variable.
+</para>
+</change>
+
+<change type="change">
+<para lang="ru">
+при плавном завершении старых рабочих процессов
+keepalive-соединения теперь закрываются
+только после истечения таймаута, заданного директивой lingering_timeout.
+</para>
+<para lang="en">
+during graceful shutdown of old worker processes
+keepalive connections are now closed
+only after timeout specified with the "lingering_timeout" directive expires.
+</para>
+</change>
+
+<change type="feature">
+<para lang="ru">
+улучшения в сборке на Windows.
+</para>
+<para lang="en">
+improvements in building on Windows.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.27.2" date="2024-07-09">
 
 <change type="feature">
