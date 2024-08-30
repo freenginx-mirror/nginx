@@ -1213,7 +1213,8 @@ ngx_mail_auth_http_create_request(ngx_mail_session_t *s, ngx_pool_t *pool,
     ngx_connection_t          *c;
 #if (NGX_MAIL_SSL)
     ngx_str_t                  protocol, cipher, verify, subject, issuer,
-                               serial, fingerprint, raw_cert, cert;
+                               serial, fingerprint, fingerprint2, raw_cert,
+                               cert;
     ngx_mail_ssl_conf_t       *sslcf;
 #endif
     ngx_mail_core_srv_conf_t  *cscf;
@@ -1275,6 +1276,10 @@ ngx_mail_auth_http_create_request(ngx_mail_session_t *s, ngx_pool_t *pool,
             return NULL;
         }
 
+        if (ngx_ssl_get_fingerprint_sha256(c, pool, &fingerprint2) != NGX_OK) {
+            return NULL;
+        }
+
         if (ahcf->pass_client_cert) {
 
             /* certificate itself, if configured */
@@ -1297,6 +1302,7 @@ ngx_mail_auth_http_create_request(ngx_mail_session_t *s, ngx_pool_t *pool,
         ngx_str_null(&issuer);
         ngx_str_null(&serial);
         ngx_str_null(&fingerprint);
+        ngx_str_null(&fingerprint2);
         ngx_str_null(&cert);
     }
 
@@ -1359,6 +1365,8 @@ ngx_mail_auth_http_create_request(ngx_mail_session_t *s, ngx_pool_t *pool,
                + sizeof("Auth-SSL-Serial: ") - 1 + serial.len
                      + sizeof(CRLF) - 1
                + sizeof("Auth-SSL-Fingerprint: ") - 1 + fingerprint.len
+                     + sizeof(CRLF) - 1
+               + sizeof("Auth-SSL-Fingerprint-SHA256: ") - 1 + fingerprint2.len
                      + sizeof(CRLF) - 1
                + sizeof("Auth-SSL-Cert: ") - 1 + cert.len
                      + sizeof(CRLF) - 1;
@@ -1517,6 +1525,13 @@ ngx_mail_auth_http_create_request(ngx_mail_session_t *s, ngx_pool_t *pool,
             b->last = ngx_cpymem(b->last, "Auth-SSL-Fingerprint: ",
                                  sizeof("Auth-SSL-Fingerprint: ") - 1);
             b->last = ngx_copy(b->last, fingerprint.data, fingerprint.len);
+            *b->last++ = CR; *b->last++ = LF;
+        }
+
+        if (fingerprint2.len) {
+            b->last = ngx_cpymem(b->last, "Auth-SSL-Fingerprint-SHA256: ",
+                                 sizeof("Auth-SSL-Fingerprint-SHA256: ") - 1);
+            b->last = ngx_copy(b->last, fingerprint2.data, fingerprint2.len);
             *b->last++ = CR; *b->last++ = LF;
         }
 
