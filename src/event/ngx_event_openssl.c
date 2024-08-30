@@ -4553,11 +4553,7 @@ ngx_ssl_ticket_key_callback(ngx_ssl_conn_t *ssl_conn,
         return -1;
     }
 
-#ifdef OPENSSL_NO_SHA256
-    digest = EVP_sha1();
-#else
     digest = EVP_sha256();
-#endif
 
     keys = SSL_CTX_get_ex_data(ssl_ctx, ngx_ssl_ticket_keys_index);
     if (keys == NULL) {
