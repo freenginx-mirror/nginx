@@ -5068,6 +5068,47 @@ ngx_ssl_check_name(ngx_str_t *name, ASN1_STRING *pattern)
 
 
 ngx_int_t
+ngx_ssl_check_verify_context(ngx_connection_t *c, ngx_ssl_t *ssl)
+{
+#ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
+
+    SSL_CTX     *ctx;
+    const char  *name;
+
+    /*
+     * Check current SSL context to match the one where the certificate
+     * verification happened.
+     *
+     * If certificate verification was in the default server block without
+     * a server name, all contexts are allowed, as non-SNI clients are
+     * allowed to request other virtual servers.
+     *
+     * If there is no context in the current server block, verification
+     * is expected to happen in the default server.
+     */
+
+    ctx = SSL_get_SSL_CTX(c->ssl->connection);
+    name = SSL_get_servername(c->ssl->connection, TLSEXT_NAMETYPE_host_name);
+
+    if (ctx == ssl->ctx) {
+        return NGX_OK;
+    }
+
+    if (ctx == c->ssl->session_ctx && (ssl->ctx == NULL || name == NULL)) {
+        return NGX_OK;
+    }
+
+    return NGX_ERROR;
+
+#else
+
+    return NGX_OK;
+
+#endif
+}
+
+
+ngx_int_t
 ngx_ssl_get_protocol(ngx_connection_t *c, ngx_pool_t *pool, ngx_str_t *s)
 {
     s->data = (u_char *) SSL_get_version(c->ssl->connection);

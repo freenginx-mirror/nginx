@@ -2073,6 +2073,16 @@ ngx_http_process_request(ngx_http_request_t *r)
         sscf = ngx_http_get_module_srv_conf(r, ngx_http_ssl_module);
 
         if (sscf->verify) {
+
+            if (ngx_ssl_check_verify_context(c, &sscf->ssl) != NGX_OK) {
+                ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,
+                              "client SSL certificate was negotiated "
+                              "with a different server name");
+
+                ngx_http_finalize_request(r, NGX_HTTP_MISDIRECTED_REQUEST);
+                return;
+            }
+
             rc = SSL_get_verify_result(c->ssl->connection);
 
             if (rc != X509_V_OK
@@ -2280,21 +2290,9 @@ ngx_http_set_virtual_server(ngx_http_request_t *r, ngx_str_t *host)
 #if (NGX_HTTP_SSL && defined SSL_CTRL_SET_TLSEXT_HOSTNAME)
 
     if (hc->ssl_servername) {
-        ngx_http_ssl_srv_conf_t  *sscf;
-
         if (rc == NGX_DECLINED) {
             cscf = hc->addr_conf->default_server;
             rc = NGX_OK;
-        }
-
-        sscf = ngx_http_get_module_srv_conf(cscf->ctx, ngx_http_ssl_module);
-
-        if (sscf->verify) {
-            ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,
-                          "client attempted to request the server name "
-                          "different from the one that was negotiated");
-            ngx_http_finalize_request(r, NGX_HTTP_MISDIRECTED_REQUEST);
-            return NGX_ERROR;
         }
     }
 
