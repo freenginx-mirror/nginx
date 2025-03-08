@@ -332,6 +332,7 @@ extern int  ngx_ssl_server_conf_index;
 extern int  ngx_ssl_session_cache_index;
 extern int  ngx_ssl_ticket_keys_index;
 extern int  ngx_ssl_ocsp_index;
+extern int  ngx_ssl_trusted_list_index;
 extern int  ngx_ssl_certificate_index;
 extern int  ngx_ssl_next_certificate_index;
 extern int  ngx_ssl_certificate_name_index;
