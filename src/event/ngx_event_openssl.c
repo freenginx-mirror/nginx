@@ -5091,20 +5091,65 @@ ngx_ssl_check_verify_context(ngx_connection_t *c, ngx_ssl_t *ssl)
     name = SSL_get_servername(c->ssl->connection, TLSEXT_NAMETYPE_host_name);
 
     if (ctx == ssl->ctx) {
-        return NGX_OK;
+        goto next;
     }
 
     if (ctx == c->ssl->session_ctx && (ssl->ctx == NULL || name == NULL)) {
-        return NGX_OK;
+        goto next;
     }
 
     return NGX_ERROR;
 
-#else
+next:
+
+#if (defined TLS1_3_VERSION                                                   \
+     && !defined LIBRESSL_VERSION_NUMBER                                      \
+     && !defined OPENSSL_IS_BORINGSSL)
+    {
+    const char   *orig;
+    SSL_SESSION  *sess;
+
+    /*
+     * When using TLSv1.3, OpenSSL 1.1.1e+ allows session resumption
+     * with names other than initially negotiated.  We use
+     * SSL_SESSION_get0_hostname() to prevent use of certificates
+     * verified in different contexts.
+     */
+
+    if (SSL_version(c->ssl->connection) != TLS1_3_VERSION) {
+        return NGX_OK;
+    }
+
+    if (!SSL_session_reused(c->ssl->connection)) {
+        return NGX_OK;
+    }
+
+    sess = SSL_get0_session(c->ssl->connection);
+
+    if (sess == NULL) {
+        return NGX_OK;
+    }
+
+    /*
+     * If a server name was originally negotiated, it shouldn't be changed
+     * or dropped.  If there was no server name, it is not checked, since
+     * non-SNI clients are allowed to request other virtual servers.
+     */
+
+    orig = SSL_SESSION_get0_hostname(sess);
+
+    if (orig == NULL) {
+        return NGX_OK;
+    }
+
+    if (name == NULL || ngx_strcmp(name, orig) != 0) {
+        return NGX_ERROR;
+    }
+    }
+#endif
+#endif
 
     return NGX_OK;
-
-#endif
 }
 
 
