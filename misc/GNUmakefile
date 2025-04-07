@@ -6,9 +6,9 @@ TEMP =		tmp
 
 CC =		cl
 OBJS =		objs.msvc8
-OPENSSL =	openssl-3.0.14
+OPENSSL =	openssl-3.0.16
 ZLIB =		zlib-1.3.1
-PCRE =		pcre2-10.44
+PCRE =		pcre2-10.45
 
 
 release: export
@@ -108,7 +108,7 @@ zip: export
 	cp -p $(OBJS)/lib/$(OPENSSL)/LICENSE.txt			\
 		$(TEMP)/$(NGINX)/docs/OpenSSL.LICENSE
 
-	cp -p $(OBJS)/lib/$(PCRE)/LICENCE				\
+	cp -p $(OBJS)/lib/$(PCRE)/LICENCE*				\
 		$(TEMP)/$(NGINX)/docs/PCRE.LICENCE
 
 	sed -ne '/^ (C) 1995-20/,/^  jloup@gzip\.org/p'			\
