@@ -7,6 +7,63 @@
 <section title="freenginx">
 
 
+<changes ver="1.27.5" date="2025-04-08">
+
+<change type="feature">
+<para lang="ru">
+параметр multipath директивы listen.<br/>
+Спасибо Maxime Dourov и Anthony Doeraene.
+</para>
+<para lang="en">
+the "multipath" parameter of the "listen" directive.<br/>
+Thanks to Maxime Dourov and Anthony Doeraene.
+</para>
+</change>
+
+<change type="change">
+<para lang="ru">
+теперь при включённой проверке клиентских SSL-сертификатов
+повторное использование SSL-сессий не допускается между серверами,
+у которых различаются сертификаты, заданные директивой ssl_trusted_certificate.
+</para>
+<para lang="en">
+SSL session reuse is no longer allowed between servers
+with different certificates set by the "ssl_trusted_certificate" directive
+if client SSL certificate verification is enabled.
+</para>
+</change>
+
+<change type="workaround">
+<para lang="ru">
+при использовании TLSv1.3 с OpenSSL 1.1.1e и новее
+было возможно повторное использование сессий
+в контексте другого виртуального сервера,
+в том числе с другими сертификатами,
+заданными директивой ssl_client_certificate.
+</para>
+<para lang="en">
+when using TLSv1.3 with OpenSSL 1.1.1e or newer,
+it was possible to reuse an SSL session
+in a different virtual server context,
+notably with different certificates
+set by the "ssl_client_certificate" directive.
+</para>
+</change>
+
+<change type="workaround">
+<para lang="ru">
+при использовании zlib-ng
+в логах появлялись сообщения "gzip filter failed to use preallocated memory".
+</para>
+<para lang="en">
+"gzip filter failed to use preallocated memory" alerts appeared in logs
+when using zlib-ng.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.27.4" date="2024-09-03">
 
 <change type="feature">
