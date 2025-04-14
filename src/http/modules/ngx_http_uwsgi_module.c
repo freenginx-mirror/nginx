@@ -54,6 +54,7 @@ typedef struct {
     ngx_uint_t                 ssl_verify_depth;
     ngx_str_t                  ssl_trusted_certificate;
     ngx_str_t                  ssl_crl;
+    ngx_array_t               *ssl_passwords;
     ngx_array_t               *ssl_conf_commands;
 #endif
 } ngx_http_uwsgi_loc_conf_t;
@@ -1568,7 +1569,7 @@ ngx_http_uwsgi_create_loc_conf(ngx_conf_t *cf)
     conf->ssl_verify_depth = NGX_CONF_UNSET_UINT;
     conf->upstream.ssl_certificate = NGX_CONF_UNSET_PTR;
     conf->upstream.ssl_certificate_key = NGX_CONF_UNSET_PTR;
-    conf->upstream.ssl_passwords = NGX_CONF_UNSET_PTR;
+    conf->ssl_passwords = NGX_CONF_UNSET_PTR;
     conf->ssl_conf_commands = NGX_CONF_UNSET_PTR;
 #endif
 
@@ -1901,8 +1902,8 @@ ngx_http_uwsgi_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
                               prev->upstream.ssl_certificate, NULL);
     ngx_conf_merge_ptr_value(conf->upstream.ssl_certificate_key,
                               prev->upstream.ssl_certificate_key, NULL);
-    ngx_conf_merge_ptr_value(conf->upstream.ssl_passwords,
-                              prev->upstream.ssl_passwords, NULL);
+    ngx_conf_merge_ptr_value(conf->ssl_passwords,
+                              prev->ssl_passwords, NULL);
 
     ngx_conf_merge_ptr_value(conf->ssl_conf_commands,
                               prev->ssl_conf_commands, NULL);
@@ -2437,15 +2438,15 @@ ngx_http_uwsgi_ssl_password_file(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     ngx_str_t  *value;
 
-    if (uwcf->upstream.ssl_passwords != NGX_CONF_UNSET_PTR) {
+    if (uwcf->ssl_passwords != NGX_CONF_UNSET_PTR) {
         return "is duplicate";
     }
 
     value = cf->args->elts;
 
-    uwcf->upstream.ssl_passwords = ngx_ssl_read_password_file(cf, &value[1]);
+    uwcf->ssl_passwords = ngx_ssl_read_password_file(cf, &value[1]);
 
-    if (uwcf->upstream.ssl_passwords == NULL) {
+    if (uwcf->ssl_passwords == NULL) {
         return NGX_CONF_ERROR;
     }
 
@@ -2474,7 +2475,7 @@ ngx_http_uwsgi_merge_ssl(ngx_conf_t *cf, ngx_http_uwsgi_loc_conf_t *conf,
         && conf->ssl_ciphers.data == NULL
         && conf->upstream.ssl_certificate == NGX_CONF_UNSET_PTR
         && conf->upstream.ssl_certificate_key == NGX_CONF_UNSET_PTR
-        && conf->upstream.ssl_passwords == NGX_CONF_UNSET_PTR
+        && conf->ssl_passwords == NGX_CONF_UNSET_PTR
         && conf->upstream.ssl_verify == NGX_CONF_UNSET
         && conf->ssl_verify_depth == NGX_CONF_UNSET_UINT
         && conf->ssl_trusted_certificate.data == NULL
@@ -2526,7 +2527,7 @@ ngx_http_uwsgi_set_ssl(ngx_conf_t *cf, ngx_http_uwsgi_loc_conf_t *uwcf)
                 || uwcf->upstream.ssl_certificate_key->lengths))
         {
             uwcf->upstream.ssl_passwords =
-                  ngx_ssl_preserve_passwords(cf, uwcf->upstream.ssl_passwords);
+                  ngx_ssl_preserve_passwords(cf, uwcf->ssl_passwords);
             if (uwcf->upstream.ssl_passwords == NULL) {
                 return NGX_ERROR;
             }
@@ -2571,7 +2572,7 @@ ngx_http_uwsgi_set_ssl(ngx_conf_t *cf, ngx_http_uwsgi_loc_conf_t *uwcf)
             || uwcf->upstream.ssl_certificate_key->lengths)
         {
             uwcf->upstream.ssl_passwords =
-                  ngx_ssl_preserve_passwords(cf, uwcf->upstream.ssl_passwords);
+                  ngx_ssl_preserve_passwords(cf, uwcf->ssl_passwords);
             if (uwcf->upstream.ssl_passwords == NULL) {
                 return NGX_ERROR;
             }
@@ -2580,7 +2581,7 @@ ngx_http_uwsgi_set_ssl(ngx_conf_t *cf, ngx_http_uwsgi_loc_conf_t *uwcf)
             if (ngx_ssl_certificate(cf, uwcf->upstream.ssl,
                                     &uwcf->upstream.ssl_certificate->value,
                                     &uwcf->upstream.ssl_certificate_key->value,
-                                    uwcf->upstream.ssl_passwords)
+                                    uwcf->ssl_passwords)
                 != NGX_OK)
             {
                 return NGX_ERROR;

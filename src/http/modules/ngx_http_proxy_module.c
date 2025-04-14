@@ -124,6 +124,7 @@ typedef struct {
     ngx_uint_t                     ssl_verify_depth;
     ngx_str_t                      ssl_trusted_certificate;
     ngx_str_t                      ssl_crl;
+    ngx_array_t                   *ssl_passwords;
     ngx_array_t                   *ssl_conf_commands;
 #endif
 } ngx_http_proxy_loc_conf_t;
@@ -3410,7 +3411,7 @@ ngx_http_proxy_create_loc_conf(ngx_conf_t *cf)
     conf->upstream.ssl_verify = NGX_CONF_UNSET;
     conf->upstream.ssl_certificate = NGX_CONF_UNSET_PTR;
     conf->upstream.ssl_certificate_key = NGX_CONF_UNSET_PTR;
-    conf->upstream.ssl_passwords = NGX_CONF_UNSET_PTR;
+    conf->ssl_passwords = NGX_CONF_UNSET_PTR;
     conf->ssl_verify_depth = NGX_CONF_UNSET_UINT;
     conf->ssl_conf_commands = NGX_CONF_UNSET_PTR;
 #endif
@@ -3760,8 +3761,8 @@ ngx_http_proxy_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
                               prev->upstream.ssl_certificate, NULL);
     ngx_conf_merge_ptr_value(conf->upstream.ssl_certificate_key,
                               prev->upstream.ssl_certificate_key, NULL);
-    ngx_conf_merge_ptr_value(conf->upstream.ssl_passwords,
-                              prev->upstream.ssl_passwords, NULL);
+    ngx_conf_merge_ptr_value(conf->ssl_passwords,
+                              prev->ssl_passwords, NULL);
 
     ngx_conf_merge_ptr_value(conf->ssl_conf_commands,
                               prev->ssl_conf_commands, NULL);
@@ -4872,15 +4873,15 @@ ngx_http_proxy_ssl_password_file(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     ngx_str_t  *value;
 
-    if (plcf->upstream.ssl_passwords != NGX_CONF_UNSET_PTR) {
+    if (plcf->ssl_passwords != NGX_CONF_UNSET_PTR) {
         return "is duplicate";
     }
 
     value = cf->args->elts;
 
-    plcf->upstream.ssl_passwords = ngx_ssl_read_password_file(cf, &value[1]);
+    plcf->ssl_passwords = ngx_ssl_read_password_file(cf, &value[1]);
 
-    if (plcf->upstream.ssl_passwords == NULL) {
+    if (plcf->ssl_passwords == NULL) {
         return NGX_CONF_ERROR;
     }
 
@@ -4942,7 +4943,7 @@ ngx_http_proxy_merge_ssl(ngx_conf_t *cf, ngx_http_proxy_loc_conf_t *conf,
         && conf->ssl_ciphers.data == NULL
         && conf->upstream.ssl_certificate == NGX_CONF_UNSET_PTR
         && conf->upstream.ssl_certificate_key == NGX_CONF_UNSET_PTR
-        && conf->upstream.ssl_passwords == NGX_CONF_UNSET_PTR
+        && conf->ssl_passwords == NGX_CONF_UNSET_PTR
         && conf->upstream.ssl_verify == NGX_CONF_UNSET
         && conf->ssl_verify_depth == NGX_CONF_UNSET_UINT
         && conf->ssl_trusted_certificate.data == NULL
@@ -4994,7 +4995,7 @@ ngx_http_proxy_set_ssl(ngx_conf_t *cf, ngx_http_proxy_loc_conf_t *plcf)
                 || plcf->upstream.ssl_certificate_key->lengths))
         {
             plcf->upstream.ssl_passwords =
-                  ngx_ssl_preserve_passwords(cf, plcf->upstream.ssl_passwords);
+                  ngx_ssl_preserve_passwords(cf, plcf->ssl_passwords);
             if (plcf->upstream.ssl_passwords == NULL) {
                 return NGX_ERROR;
             }
@@ -5039,7 +5040,7 @@ ngx_http_proxy_set_ssl(ngx_conf_t *cf, ngx_http_proxy_loc_conf_t *plcf)
             || plcf->upstream.ssl_certificate_key->lengths)
         {
             plcf->upstream.ssl_passwords =
-                  ngx_ssl_preserve_passwords(cf, plcf->upstream.ssl_passwords);
+                  ngx_ssl_preserve_passwords(cf, plcf->ssl_passwords);
             if (plcf->upstream.ssl_passwords == NULL) {
                 return NGX_ERROR;
             }
@@ -5048,7 +5049,7 @@ ngx_http_proxy_set_ssl(ngx_conf_t *cf, ngx_http_proxy_loc_conf_t *plcf)
             if (ngx_ssl_certificate(cf, plcf->upstream.ssl,
                                     &plcf->upstream.ssl_certificate->value,
                                     &plcf->upstream.ssl_certificate_key->value,
-                                    plcf->upstream.ssl_passwords)
+                                    plcf->ssl_passwords)
                 != NGX_OK)
             {
                 return NGX_ERROR;
