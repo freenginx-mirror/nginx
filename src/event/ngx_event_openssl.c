@@ -5270,6 +5270,26 @@ ngx_ssl_get_curve(ngx_connection_t *c, ngx_pool_t *pool, ngx_str_t *s)
             return NGX_OK;
         }
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        {
+        u_char  *name;
+
+        name = (u_char *) SSL_group_to_name(c->ssl->connection, nid);
+
+        if (name) {
+            s->len = ngx_strlen(name);
+
+            s->data = ngx_pnalloc(pool, s->len);
+            if (s->data == NULL) {
+                return NGX_ERROR;
+            }
+
+            ngx_memcpy(s->data, name, s->len);
+            return NGX_OK;
+        }
+        }
+#endif
+
         s->len = sizeof("0x0000") - 1;
 
         s->data = ngx_pnalloc(pool, s->len);
@@ -5292,10 +5312,13 @@ ngx_ssl_get_curve(ngx_connection_t *c, ngx_pool_t *pool, ngx_str_t *s)
 ngx_int_t
 ngx_ssl_get_curves(ngx_connection_t *c, ngx_pool_t *pool, ngx_str_t *s)
 {
-#ifdef SSL_CTRL_GET_CURVES
+#ifdef SSL_get1_curves
 
     int         *curves, n, i, nid;
     u_char      *p;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    u_char      *name;
+#endif
     size_t       len;
 
     n = SSL_get1_curves(c->ssl->connection, NULL);
@@ -5316,12 +5339,25 @@ ngx_ssl_get_curves(ngx_connection_t *c, ngx_pool_t *pool, ngx_str_t *s)
     for (i = 0; i < n; i++) {
         nid = curves[i];
 
-        if (nid & TLSEXT_nid_unknown) {
-            len += sizeof("0x0000") - 1;
-
-        } else {
+        if ((nid & TLSEXT_nid_unknown) == 0) {
             len += ngx_strlen(OBJ_nid2sn(nid));
+            goto next_length;
         }
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+
+        name = (u_char *) SSL_group_to_name(c->ssl->connection, nid);
+
+        if (name) {
+            len += ngx_strlen(name);
+            goto next_length;
+        }
+
+#endif
+
+        len += sizeof("0x0000") - 1;
+
+    next_length:
 
         len += sizeof(":") - 1;
     }
@@ -5336,12 +5372,26 @@ ngx_ssl_get_curves(ngx_connection_t *c, ngx_pool_t *pool, ngx_str_t *s)
     for (i = 0; i < n; i++) {
         nid = curves[i];
 
-        if (nid & TLSEXT_nid_unknown) {
-            p = ngx_sprintf(p, "0x%04xd", nid & 0xffff);
-
-        } else {
+        if ((nid & TLSEXT_nid_unknown) == 0) {
             p = ngx_sprintf(p, "%s", OBJ_nid2sn(nid));
+            goto next_value;
+
         }
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+
+        name = (u_char *) SSL_group_to_name(c->ssl->connection, nid);
+
+        if (name) {
+            p = ngx_sprintf(p, "%s", name);
+            goto next_value;
+        }
+
+#endif
+
+        p = ngx_sprintf(p, "0x%04xd", nid & 0xffff);
+
+    next_value:
 
         *p++ = ':';
     }
