@@ -7,6 +7,39 @@
 <section title="freenginx">
 
 
+<changes ver="1.27.6" date="2025-04-15">
+
+<change type="workaround">
+<para lang="ru">
+при использовании OpenSSL 3.5 в переменных $ssl_curve и $ssl_curves
+не отображалось название группы X25519MLKEM768.
+</para>
+<para lang="en">
+the X25519MLKEM768 group name was not shown
+in the $ssl_curve and $ssl_curves variables when using OpenSSL 3.5.
+</para>
+</change>
+
+<change type="bugfix">
+<para lang="ru">
+в рабочем процессе мог произойти segmentation fault,
+если использовалась директива proxy_ssl_password_file,
+а в директивах proxy_ssl_certificate или proxy_ssl_certificate_key
+использовались переменные;
+ошибка появилась в 1.23.1.
+</para>
+<para lang="en">
+a segmentation fault might occur in a worker process
+if the "proxy_ssl_password_file" directive was used
+along with variables
+in the "proxy_ssl_certificate" or "proxy_ssl_certificate_key" directives;
+the bug had appeared in 1.23.1.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.27.5" date="2025-04-08">
 
 <change type="feature">
