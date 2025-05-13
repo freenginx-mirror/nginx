@@ -977,8 +977,11 @@ ngx_stream_proxy_send_proxy_protocol(ngx_stream_session_t *s)
 
         pscf = ngx_stream_get_module_srv_conf(s, ngx_stream_proxy_module);
 
-        ngx_add_timer(pc->write, pscf->timeout);
+        if (!pc->write->timer_set) {
+            ngx_add_timer(pc->write, pscf->connect_timeout);
+        }
 
+        pc->read->handler = ngx_stream_proxy_connect_handler;
         pc->write->handler = ngx_stream_proxy_connect_handler;
 
         return NGX_AGAIN;
