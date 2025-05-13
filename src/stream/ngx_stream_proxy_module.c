@@ -929,6 +929,10 @@ ngx_stream_proxy_init_upstream(ngx_stream_session_t *s)
     pc->read->handler = ngx_stream_proxy_upstream_handler;
     pc->write->handler = ngx_stream_proxy_upstream_handler;
 
+    if (pc->write->timer_set) {
+        ngx_del_timer(pc->write);
+    }
+
     if (pc->read->ready) {
         ngx_post_event(pc->read, &ngx_posted_events);
     }
@@ -1111,10 +1115,6 @@ ngx_stream_proxy_ssl_handshake(ngx_connection_t *pc)
                               &u->ssl_name);
                 goto failed;
             }
-        }
-
-        if (pc->write->timer_set) {
-            ngx_del_timer(pc->write);
         }
 
         ngx_stream_proxy_init_upstream(s);
@@ -1493,8 +1493,6 @@ ngx_stream_proxy_connect_handler(ngx_event_t *ev)
         ngx_stream_proxy_next_upstream(s);
         return;
     }
-
-    ngx_del_timer(c->write);
 
     ngx_log_debug0(NGX_LOG_DEBUG_STREAM, c->log, 0,
                    "stream proxy connect upstream");
