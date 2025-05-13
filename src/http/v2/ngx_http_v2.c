@@ -503,6 +503,7 @@ ngx_int_t
 ngx_http_v2_send_output_queue(ngx_http_v2_connection_t *h2c)
 {
     int                        tcp_nodelay;
+    off_t                      sent;
     ngx_chain_t               *cl;
     ngx_event_t               *wev;
     ngx_connection_t          *c;
@@ -536,6 +537,8 @@ ngx_http_v2_send_output_queue(ngx_http_v2_connection_t *h2c)
                        out, out->stream ? out->stream->node->id : 0,
                        out->blocked, out->length);
     }
+
+    sent = c->sent;
 
     cl = c->send_chain(c, cl, 0);
 
@@ -592,7 +595,10 @@ ngx_http_v2_send_output_queue(ngx_http_v2_connection_t *h2c)
     h2c->last_out = frame;
 
     if (!wev->ready) {
-        ngx_add_timer(wev, clcf->send_timeout);
+        if (c->sent != sent || !wev->timer_set) {
+            ngx_add_timer(wev, clcf->send_timeout);
+        }
+
         return NGX_AGAIN;
     }
 
