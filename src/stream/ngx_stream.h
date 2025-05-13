@@ -264,20 +264,20 @@ typedef struct {
 #define ngx_stream_delete_ctx(s, module)       s->ctx[module.ctx_index] = NULL;
 
 
-#define ngx_stream_get_module_main_conf(s, module)                             \
+#define ngx_stream_get_module_main_conf(s, module)                            \
     (s)->main_conf[module.ctx_index]
-#define ngx_stream_get_module_srv_conf(s, module)                              \
+#define ngx_stream_get_module_srv_conf(s, module)                             \
     (s)->srv_conf[module.ctx_index]
 
-#define ngx_stream_conf_get_module_main_conf(cf, module)                       \
+#define ngx_stream_conf_get_module_main_conf(cf, module)                      \
     ((ngx_stream_conf_ctx_t *) cf->ctx)->main_conf[module.ctx_index]
-#define ngx_stream_conf_get_module_srv_conf(cf, module)                        \
+#define ngx_stream_conf_get_module_srv_conf(cf, module)                       \
     ((ngx_stream_conf_ctx_t *) cf->ctx)->srv_conf[module.ctx_index]
 
-#define ngx_stream_cycle_get_module_main_conf(cycle, module)                   \
-    (cycle->conf_ctx[ngx_stream_module.index] ?                                \
-        ((ngx_stream_conf_ctx_t *) cycle->conf_ctx[ngx_stream_module.index])   \
-            ->main_conf[module.ctx_index]:                                     \
+#define ngx_stream_cycle_get_module_main_conf(cycle, module)                  \
+    (cycle->conf_ctx[ngx_stream_module.index] ?                               \
+        ((ngx_stream_conf_ctx_t *) cycle->conf_ctx[ngx_stream_module.index])  \
+            ->main_conf[module.ctx_index]:                                    \
         NULL)
 
 
