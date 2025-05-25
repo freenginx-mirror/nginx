@@ -479,7 +479,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
     u_char                    *last;
     size_t                     root;
     ngx_int_t                  rc, start, end;
-    ngx_uint_t                 level, length;
+    ngx_uint_t                 level, length, directio;
     ngx_str_t                  path, value;
     ngx_log_t                 *log;
     ngx_buf_t                 *b;
@@ -519,7 +519,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
     ngx_memzero(&of, sizeof(ngx_open_file_info_t));
 
     of.read_ahead = clcf->read_ahead;
-    of.directio = NGX_MAX_OFF_T_VALUE;
+    of.directio = clcf->directio;
     of.valid = clcf->open_file_cache_valid;
     of.min_uses = clcf->open_file_cache_min_uses;
     of.errors = clcf->open_file_cache_errors;
@@ -579,6 +579,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
 
     start = -1;
     length = 0;
+    directio = 0;
     r->headers_out.content_length_n = of.size;
     mp4 = NULL;
     b = NULL;
@@ -614,6 +615,21 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
     if (start >= 0) {
         r->single_range = 1;
 
+        if (of.is_directio) {
+
+            /*
+             * DIRECTIO is set on transfer only
+             * to allow kernel to cache "moov" atom
+             */
+
+            if (ngx_directio_off(of.fd) == NGX_FILE_ERROR) {
+                ngx_log_error(NGX_LOG_ALERT, log, ngx_errno,
+                              ngx_directio_off_n " \"%s\" failed", path.data);
+            }
+
+            directio = 1;
+        }
+
         mp4 = ngx_pcalloc(r->pool, sizeof(ngx_http_mp4_file_t));
         if (mp4 == NULL) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -622,6 +638,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
         mp4->file.fd = of.fd;
         mp4->file.name = path;
         mp4->file.log = r->connection->log;
+        mp4->file.directio = of.is_directio;
         mp4->end = of.size;
         mp4->start = (ngx_uint_t) start;
         mp4->length = length;
@@ -656,22 +673,13 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
 
     log->action = "sending mp4 to client";
 
-    if (clcf->directio <= of.size) {
+    if (directio) {
 
-        /*
-         * DIRECTIO is set on transfer only
-         * to allow kernel to cache "moov" atom
-         */
+        /* DIRECTIO was switched off, restore it */
 
         if (ngx_directio_on(of.fd) == NGX_FILE_ERROR) {
             ngx_log_error(NGX_LOG_ALERT, log, ngx_errno,
                           ngx_directio_on_n " \"%s\" failed", path.data);
-        }
-
-        of.is_directio = 1;
-
-        if (mp4) {
-            mp4->file.directio = 1;
         }
     }
 
