@@ -249,6 +249,7 @@ ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
                 of->is_link = file->is_link;
                 of->is_exec = file->is_exec;
                 of->is_directio = file->is_directio;
+                of->is_directio_off = 0;
 
                 if (!file->is_dir) {
                     file->count++;
@@ -313,6 +314,7 @@ ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
                 }
 
                 of->is_directio = file->is_directio;
+                of->is_directio_off = 0;
 
                 goto update;
             }
@@ -920,7 +922,11 @@ ngx_open_and_stat_file(ngx_str_t *name, ngx_open_file_info_t *of,
         }
 
         if (of->directio <= ngx_file_size(&fi)) {
-            if (ngx_directio_on(fd) == NGX_FILE_ERROR) {
+            if (of->directio_off) {
+                of->is_directio = 1;
+                of->is_directio_off = 1;
+
+            } else if (ngx_directio_on(fd) == NGX_FILE_ERROR) {
                 ngx_log_error(NGX_LOG_ALERT, log, ngx_errno,
                               ngx_directio_on_n " \"%V\" failed", name);
 

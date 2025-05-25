@@ -42,12 +42,14 @@ typedef struct {
     unsigned                 log:1;
     unsigned                 errors:1;
     unsigned                 events:1;
+    unsigned                 directio_off:1;
 
     unsigned                 is_dir:1;
     unsigned                 is_file:1;
     unsigned                 is_link:1;
     unsigned                 is_exec:1;
     unsigned                 is_directio:1;
+    unsigned                 is_directio_off:1;
 } ngx_open_file_info_t;
 
 

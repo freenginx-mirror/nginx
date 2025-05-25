@@ -479,7 +479,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
     u_char                    *last;
     size_t                     root;
     ngx_int_t                  rc, start, end;
-    ngx_uint_t                 level, length, directio;
+    ngx_uint_t                 level, length;
     ngx_str_t                  path, value;
     ngx_log_t                 *log;
     ngx_buf_t                 *b;
@@ -520,6 +520,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
 
     of.read_ahead = clcf->read_ahead;
     of.directio = clcf->directio;
+    of.directio_off = 1;
     of.valid = clcf->open_file_cache_valid;
     of.min_uses = clcf->open_file_cache_min_uses;
     of.errors = clcf->open_file_cache_errors;
@@ -579,7 +580,6 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
 
     start = -1;
     length = 0;
-    directio = 0;
     r->headers_out.content_length_n = of.size;
     mp4 = NULL;
     b = NULL;
@@ -615,7 +615,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
     if (start >= 0) {
         r->single_range = 1;
 
-        if (of.is_directio) {
+        if (of.is_directio && !of.is_directio_off) {
 
             /*
              * DIRECTIO is set on transfer only
@@ -627,7 +627,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
                               ngx_directio_off_n " \"%s\" failed", path.data);
             }
 
-            directio = 1;
+            of.is_directio_off = 1;
         }
 
         mp4 = ngx_pcalloc(r->pool, sizeof(ngx_http_mp4_file_t));
@@ -673,7 +673,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
 
     log->action = "sending mp4 to client";
 
-    if (directio) {
+    if (of.is_directio_off) {
 
         /* DIRECTIO was switched off, restore it */
 
