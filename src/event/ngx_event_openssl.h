@@ -83,6 +83,12 @@
 #endif
 
 
+#if (OPENSSL_VERSION_NUMBER > 0x30300000L)
+#define SSL_SESSION_get_time(s)      SSL_SESSION_get_time_ex(s)
+#define SSL_SESSION_set_time(s, t)   SSL_SESSION_set_time_ex(s, t)
+#endif
+
+
 typedef struct ngx_ssl_ocsp_s  ngx_ssl_ocsp_t;
 
 

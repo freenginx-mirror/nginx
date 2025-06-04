@@ -1190,7 +1190,7 @@ ngx_ssl_info_callback(const ngx_ssl_conn_t *ssl_conn, int where, int ret)
 
             } else {
                 SSL_SESSION_set_time(sess, now);
-                SSL_SESSION_set_timeout(sess, timeout - (now - time));
+                SSL_SESSION_set_timeout(sess, (long) (timeout - (now - time)));
             }
         }
     }
