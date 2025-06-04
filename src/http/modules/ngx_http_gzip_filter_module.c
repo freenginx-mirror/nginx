@@ -520,7 +520,7 @@ ngx_http_gzip_filter_memory(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
              * buffer for literals/lengths.
              */
 
-            ctx->allocated += (1 << (memlevel + 6));
+            ctx->allocated += ((ngx_uint_t) 1 << (memlevel + 6));
             ctx->zlib_lit_mem = 1;
         }
 
