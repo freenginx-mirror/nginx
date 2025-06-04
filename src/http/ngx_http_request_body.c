@@ -1220,7 +1220,8 @@ ngx_http_request_body_chunked_filter(ngx_http_request_t *r, ngx_chain_t *in)
                         }
 
                     } else {
-                        ngx_memmove(b->last, cl->buf->pos, rb->chunked->size);
+                        ngx_memmove(b->last, cl->buf->pos,
+                                    (size_t) rb->chunked->size);
                         b->last += rb->chunked->size;
                         cl->buf->pos += rb->chunked->size;
                         rb->chunked->size = 0;

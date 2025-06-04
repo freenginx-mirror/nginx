@@ -387,7 +387,8 @@ ngx_http_file_cache_open(ngx_http_request_t *r)
 
     if (of.is_directio) {
 
-        c->body_start = ngx_align(c->body_start, clcf->directio_alignment);
+        c->body_start = ngx_align(c->body_start,
+                                  (size_t) clcf->directio_alignment);
 
         c->buf = ngx_calloc_buf(r->pool);
         if (c->buf == NULL) {
@@ -395,7 +396,7 @@ ngx_http_file_cache_open(ngx_http_request_t *r)
         }
 
         c->buf->start = ngx_pmemalign(r->pool, c->body_start,
-                                      clcf->directio_alignment);
+                                      (size_t) clcf->directio_alignment);
         if (c->buf->start == NULL) {
             return NGX_ERROR;
         }

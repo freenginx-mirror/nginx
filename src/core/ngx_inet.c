@@ -1286,7 +1286,7 @@ ngx_inet_add_addr(ngx_pool_t *pool, ngx_url_t *u, struct sockaddr *sockaddr,
 
         ngx_memcpy(sa, sockaddr, socklen);
 
-        ngx_inet_set_port(sa, u->port + i);
+        ngx_inet_set_port(sa, u->port + (in_port_t) i);
 
         switch (sa->sa_family) {
 
