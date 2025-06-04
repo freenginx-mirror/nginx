@@ -245,7 +245,10 @@ ngx_sendmsg_vec(ngx_connection_t *c, ngx_iovec_t *vec)
 size_t
 ngx_set_srcaddr_cmsg(struct cmsghdr *cmsg, struct sockaddr *local_sockaddr)
 {
+#if (NGX_HAVE_IP_SENDSRCADDR || NGX_HAVE_IP_PKTINFO                           \
+     || (NGX_HAVE_INET6 && NGX_HAVE_IPV6_RECVPKTINFO))
     size_t                len;
+#endif
 #if (NGX_HAVE_IP_SENDSRCADDR)
     struct in_addr       *addr;
     struct sockaddr_in   *sin;
