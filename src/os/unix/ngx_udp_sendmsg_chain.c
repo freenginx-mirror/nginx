@@ -216,7 +216,7 @@ ngx_sendmsg_vec(ngx_connection_t *c, ngx_iovec_t *vec)
     ngx_memzero(&msg, sizeof(struct msghdr));
 
     if (c->socklen) {
-        msg.msg_name = c->sockaddr;
+        msg.msg_name = (void *) c->sockaddr;
         msg.msg_namelen = c->socklen;
     }
 
@@ -226,7 +226,7 @@ ngx_sendmsg_vec(ngx_connection_t *c, ngx_iovec_t *vec)
 #if (NGX_HAVE_ADDRINFO_CMSG)
     if (c->listening && c->listening->wildcard && c->local_sockaddr) {
 
-        msg.msg_control = msg_control;
+        msg.msg_control = (void *) msg_control;
         msg.msg_controllen = sizeof(msg_control);
         ngx_memzero(msg_control, sizeof(msg_control));
 
