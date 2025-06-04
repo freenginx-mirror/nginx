@@ -1043,3 +1043,16 @@ ngx_feature_test='struct addrinfo *res;
                   if (getaddrinfo("localhost", NULL, NULL, &res) != 0) return 1;
                   freeaddrinfo(res)'
 . auto/feature
+
+
+ngx_feature="sigaction(SA_SIGINFO)"
+ngx_feature_name="NGX_HAVE_SIGINFO"
+ngx_feature_run=no
+ngx_feature_incs="#include <signal.h>"
+ngx_feature_path=
+ngx_feature_libs=
+ngx_feature_test="struct sigaction sa;
+                  sa.sa_flags = SA_SIGINFO;
+                  sa.sa_sigaction = NULL;
+                  if (sigaction(0, &sa, NULL) == -1) return 1;"
+. auto/feature
