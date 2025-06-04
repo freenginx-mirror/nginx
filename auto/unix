@@ -645,6 +645,8 @@ ngx_param=NGX_PTR_SIZE; ngx_value=$ngx_size; . auto/types/value
 
 NGX_INCLUDE_AUTO_CONFIG_H="#include \"ngx_auto_config.h\""
 
+ngx_type="uint8_t"; ngx_types="u_int8_t"; . auto/types/typedef
+ngx_type="uint16_t"; ngx_types="u_int16_t"; . auto/types/typedef
 ngx_type="uint32_t"; ngx_types="u_int32_t"; . auto/types/typedef
 ngx_type="uint64_t"; ngx_types="u_int64_t"; . auto/types/typedef
 
