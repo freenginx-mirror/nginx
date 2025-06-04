@@ -53,9 +53,7 @@ typedef struct {
 } ngx_open_file_info_t;
 
 
-typedef struct ngx_cached_open_file_s  ngx_cached_open_file_t;
-
-struct ngx_cached_open_file_s {
+typedef struct {
     ngx_rbtree_node_t        node;
     ngx_queue_t              queue;
 
@@ -87,7 +85,7 @@ struct ngx_cached_open_file_s {
     unsigned                 is_directio:1;
 
     ngx_event_t             *event;
-};
+} ngx_cached_open_file_t;
 
 
 typedef struct {

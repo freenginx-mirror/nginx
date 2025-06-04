@@ -974,7 +974,7 @@ ngx_open_file_add_event(ngx_open_file_cache_t *cache,
     file->use_event = 0;
 
     file->event = ngx_calloc(sizeof(ngx_event_t), log);
-    if (file->event== NULL) {
+    if (file->event == NULL) {
         return;
     }
 
