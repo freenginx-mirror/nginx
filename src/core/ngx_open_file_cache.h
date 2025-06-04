@@ -67,6 +67,8 @@ typedef struct {
     off_t                    size;
     ngx_err_t                err;
 
+    ngx_uint_t               directio_off;
+
     uint32_t                 uses;
 
 #if (NGX_HAVE_OPENAT)
@@ -103,6 +105,7 @@ typedef struct {
     ngx_open_file_cache_t   *cache;
     ngx_cached_open_file_t  *file;
     ngx_uint_t               min_uses;
+    ngx_uint_t               directio_off;
     ngx_log_t               *log;
 } ngx_open_file_cache_cleanup_t;
 
@@ -124,6 +127,9 @@ ngx_open_file_cache_t *ngx_open_file_cache_init(ngx_pool_t *pool,
     ngx_uint_t max, time_t inactive);
 ngx_int_t ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
     ngx_open_file_info_t *of, ngx_pool_t *pool);
+
+ngx_int_t ngx_open_file_directio_on(ngx_fd_t fd, ngx_pool_t *pool);
+ngx_int_t ngx_open_file_directio_off(ngx_fd_t fd, ngx_pool_t *pool);
 
 
 #endif /* _NGX_OPEN_FILE_CACHE_H_INCLUDED_ */

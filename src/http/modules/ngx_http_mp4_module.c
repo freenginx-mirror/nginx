@@ -622,7 +622,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
              * to allow kernel to cache "moov" atom
              */
 
-            if (ngx_directio_off(of.fd) == NGX_FILE_ERROR) {
+            if (ngx_open_file_directio_off(of.fd, r->pool) != NGX_OK) {
                 ngx_log_error(NGX_LOG_ALERT, log, ngx_errno,
                               ngx_directio_off_n " \"%s\" failed", path.data);
             }
@@ -677,7 +677,7 @@ ngx_http_mp4_handler(ngx_http_request_t *r)
 
         /* DIRECTIO was switched off, restore it */
 
-        if (ngx_directio_on(of.fd) == NGX_FILE_ERROR) {
+        if (ngx_open_file_directio_on(of.fd, r->pool) != NGX_OK) {
             ngx_log_error(NGX_LOG_ALERT, log, ngx_errno,
                           ngx_directio_on_n " \"%s\" failed", path.data);
         }
