@@ -147,6 +147,7 @@ ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
     time_t                          now;
     uint32_t                        hash;
     ngx_int_t                       rc;
+    ngx_uint_t                      uses;
     ngx_file_info_t                 fi;
     ngx_pool_cleanup_t             *cln;
     ngx_cached_open_file_t         *file;
@@ -348,6 +349,8 @@ ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
 
         file->close = 1;
 
+        uses = file->uses;
+
         goto create;
     }
 
@@ -358,6 +361,8 @@ ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
     if (rc != NGX_OK && (of->err == 0 || !of->errors)) {
         goto failed;
     }
+
+    uses = 1;
 
 create:
 
@@ -387,7 +392,7 @@ create:
 
     cache->current++;
 
-    file->uses = 1;
+    file->uses = uses;
     file->count = 0;
     file->use_event = 0;
     file->event = NULL;
