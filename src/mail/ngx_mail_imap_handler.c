@@ -179,6 +179,7 @@ ngx_mail_imap_auth_state(ngx_event_t *rev)
 
             case NGX_IMAP_LOGOUT:
                 s->quit = 1;
+                s->no_lingering_close = 1;
                 ngx_str_set(&s->text, imap_bye);
                 break;
 

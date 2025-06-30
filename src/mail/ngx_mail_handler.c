@@ -22,6 +22,10 @@ static ngx_int_t ngx_mail_verify_cert(ngx_mail_session_t *s,
     ngx_connection_t *c);
 #endif
 
+static void ngx_mail_lingering_close(ngx_connection_t *c);
+static void ngx_mail_lingering_close_handler(ngx_event_t *rev);
+static void ngx_mail_empty_handler(ngx_event_t *wev);
+
 
 void
 ngx_mail_init_connection(ngx_connection_t *c)
@@ -1108,7 +1112,7 @@ ngx_mail_send(ngx_event_t *wev)
         }
 
         if (s->quit) {
-            ngx_mail_close_connection(c);
+            ngx_mail_lingering_close(c);
             return;
         }
 
@@ -1264,6 +1268,149 @@ ngx_mail_session_internal_server_error(ngx_mail_session_t *s)
     s->quit = 1;
 
     ngx_mail_send(s->connection->write);
+}
+
+
+static void
+ngx_mail_lingering_close(ngx_connection_t *c)
+{
+    ngx_event_t               *rev, *wev;
+    ngx_mail_session_t        *s;
+    ngx_mail_core_srv_conf_t  *cscf;
+
+    s = c->data;
+
+    cscf = ngx_mail_get_module_srv_conf(s, ngx_mail_core_module);
+
+    if (s->no_lingering_close || !cscf->lingering_close) {
+        ngx_mail_close_connection(c);
+        return;
+    }
+
+    if (s->lingering_time == 0) {
+        s->lingering_time = ngx_current_msec + cscf->lingering_time;
+    }
+
+#if (NGX_MAIL_SSL)
+    if (c->ssl) {
+        ngx_int_t  rc;
+
+        c->ssl->shutdown_without_free = 1;
+
+        rc = ngx_ssl_shutdown(c);
+
+        if (rc == NGX_ERROR) {
+            ngx_mail_close_connection(c);
+            return;
+        }
+
+        if (rc == NGX_AGAIN) {
+            c->ssl->handler = ngx_mail_lingering_close;
+            return;
+        }
+    }
+#endif
+
+    rev = c->read;
+    rev->handler = ngx_mail_lingering_close_handler;
+
+    if (ngx_handle_read_event(rev, 0) != NGX_OK) {
+        ngx_mail_close_connection(c);
+        return;
+    }
+
+    wev = c->write;
+    wev->handler = ngx_mail_empty_handler;
+
+    if (wev->active && (ngx_event_flags & NGX_USE_LEVEL_EVENT)) {
+        if (ngx_del_event(wev, NGX_WRITE_EVENT, 0) != NGX_OK) {
+            ngx_mail_close_connection(c);
+            return;
+        }
+    }
+
+    if (ngx_shutdown_socket(c->fd, NGX_WRITE_SHUTDOWN) == -1) {
+        ngx_connection_error(c, ngx_socket_errno,
+                             ngx_shutdown_socket_n " failed");
+        ngx_mail_close_connection(c);
+        return;
+    }
+
+    c->close = 0;
+    ngx_reusable_connection(c, 1);
+
+    ngx_add_timer(rev, cscf->lingering_timeout);
+
+    if (rev->ready) {
+        ngx_mail_lingering_close_handler(rev);
+    }
+}
+
+
+static void
+ngx_mail_lingering_close_handler(ngx_event_t *rev)
+{
+    ssize_t                    n;
+    ngx_msec_t                 timer;
+    ngx_connection_t          *c;
+    ngx_mail_session_t        *s;
+    ngx_mail_core_srv_conf_t  *cscf;
+    u_char                     buffer[NGX_MAIL_LINGERING_BUFFER_SIZE];
+
+    c = rev->data;
+    s = c->data;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_MAIL, c->log, 0,
+                   "mail lingering close handler");
+
+    if (rev->timedout || c->close) {
+        ngx_mail_close_connection(c);
+        return;
+    }
+
+    timer = s->lingering_time - ngx_current_msec;
+    if ((ngx_msec_int_t) timer <= 0) {
+        ngx_mail_close_connection(c);
+        return;
+    }
+
+    do {
+        n = c->recv(c, buffer, NGX_MAIL_LINGERING_BUFFER_SIZE);
+
+        ngx_log_debug1(NGX_LOG_DEBUG_MAIL, c->log, 0, "lingering read: %z", n);
+
+        if (n == NGX_AGAIN) {
+            break;
+        }
+
+        if (n == NGX_ERROR || n == 0) {
+            ngx_mail_close_connection(c);
+            return;
+        }
+
+    } while (rev->ready);
+
+    if (ngx_handle_read_event(rev, 0) != NGX_OK) {
+        ngx_mail_close_connection(c);
+        return;
+    }
+
+    cscf = ngx_mail_get_module_srv_conf(s, ngx_mail_core_module);
+
+    if (timer > cscf->lingering_timeout) {
+        timer = cscf->lingering_timeout;
+    }
+
+    ngx_add_timer(rev, timer);
+}
+
+
+static void
+ngx_mail_empty_handler(ngx_event_t *wev)
+{
+    ngx_log_debug0(NGX_LOG_DEBUG_MAIL, wev->log, 0, "mail empty handler");
+
+    return;
 }
 
 
