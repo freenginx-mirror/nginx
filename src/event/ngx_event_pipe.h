@@ -91,7 +91,8 @@ struct ngx_event_pipe_s {
     ngx_buf_t         *buf_to_file;
 
     size_t             limit_rate;
-    time_t             start_sec;
+    ngx_msec_t         limit_last;
+    off_t              limit_excess;
 
     ngx_temp_file_t   *temp_file;
 

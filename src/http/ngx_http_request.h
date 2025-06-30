@@ -448,6 +448,9 @@ struct ngx_http_request_s {
     size_t                            limit_rate;
     size_t                            limit_rate_after;
 
+    ngx_msec_t                        limit_last;
+    off_t                             limit_excess;
+
     /* used to learn the Apache compatible response length without a header */
     size_t                            header_size;
 

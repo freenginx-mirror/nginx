@@ -435,7 +435,6 @@ ngx_stream_proxy_handler(ngx_stream_session_t *s)
     }
 
     u->peer.type = c->type;
-    u->start_sec = ngx_time();
 
     c->write->handler = ngx_stream_proxy_downstream_handler;
     c->read->handler = ngx_stream_proxy_downstream_handler;
@@ -923,6 +922,9 @@ ngx_stream_proxy_init_upstream(ngx_stream_session_t *s)
 
     u->upload_rate = ngx_stream_complex_value_size(s, pscf->upload_rate, 0);
     u->download_rate = ngx_stream_complex_value_size(s, pscf->download_rate, 0);
+
+    u->upload_last = ngx_current_msec;
+    u->upload_excess = s->received;
 
     u->connected = 1;
 
@@ -1555,14 +1557,15 @@ ngx_stream_proxy_process(ngx_stream_session_t *s, ngx_uint_t from_upstream,
     ngx_uint_t do_write)
 {
     char                         *recv_action, *send_action;
-    off_t                        *received, limit, sent;
+    off_t                        *received, *limit_excess, limit, excess, sent;
     size_t                        size, limit_rate;
     ssize_t                       n;
     ngx_buf_t                    *b;
     ngx_int_t                     rc;
     ngx_uint_t                    flags, *packets;
-    ngx_msec_t                    delay;
+    ngx_msec_t                   *limit_last, delay;
     ngx_chain_t                  *cl, **ll, **out, **busy;
+    ngx_msec_int_t                ms;
     ngx_connection_t             *c, *pc, *src, *dst;
     ngx_log_handler_pt            handler;
     ngx_stream_upstream_t        *u;
@@ -1595,6 +1598,8 @@ ngx_stream_proxy_process(ngx_stream_session_t *s, ngx_uint_t from_upstream,
         dst = c;
         b = &u->upstream_buf;
         limit_rate = u->download_rate;
+        limit_last = &u->download_last;
+        limit_excess = &u->download_excess;
         received = &u->received;
         packets = &u->responses;
         out = &u->downstream_out;
@@ -1607,6 +1612,8 @@ ngx_stream_proxy_process(ngx_stream_session_t *s, ngx_uint_t from_upstream,
         dst = pc;
         b = &u->downstream_buf;
         limit_rate = u->upload_rate;
+        limit_last = &u->upload_last;
+        limit_excess = &u->upload_excess;
         received = &s->received;
         packets = &u->requests;
         out = &u->upstream_out;
@@ -1616,6 +1623,7 @@ ngx_stream_proxy_process(ngx_stream_session_t *s, ngx_uint_t from_upstream,
     }
 
 #if (NGX_SUPPRESS_WARN)
+    excess = 0;
     sent = 0;
 #endif
 
@@ -1652,12 +1660,19 @@ ngx_stream_proxy_process(ngx_stream_session_t *s, ngx_uint_t from_upstream,
         if (size && src->read->ready && !src->read->delayed) {
 
             if (limit_rate) {
-                limit = (off_t) limit_rate * (ngx_time() - u->start_sec + 1)
-                        - *received;
+                ms = (ngx_msec_int_t) (ngx_current_msec - *limit_last);
+                ms = ngx_max(ms, 0);
+
+                excess = (off_t) (*limit_excess
+                                  - (uint64_t) limit_rate * ms / 1000);
+                excess = ngx_max(excess, 0);
+
+                limit = (off_t) limit_rate - excess;
 
                 if (limit <= 0) {
                     src->read->delayed = 1;
-                    delay = (ngx_msec_t) (- limit * 1000 / limit_rate + 1);
+                    excess -= (off_t) limit_rate / 2;
+                    delay = (ngx_msec_t) (excess * 1000 / limit_rate + 1);
                     ngx_add_timer(src->read, delay);
                     break;
                 }
@@ -1682,7 +1697,15 @@ ngx_stream_proxy_process(ngx_stream_session_t *s, ngx_uint_t from_upstream,
 
             if (n >= 0) {
                 if (limit_rate) {
-                    delay = (ngx_msec_t) (n * 1000 / limit_rate);
+                    excess += n;
+
+                    *limit_last = ngx_current_msec;
+                    *limit_excess = excess;
+
+                    excess -= (off_t) limit_rate / 2;
+                    excess = ngx_max(excess, 0);
+
+                    delay = (ngx_msec_t) (excess * 1000 / limit_rate);
 
                     if (delay > 0) {
                         src->read->delayed = 1;
