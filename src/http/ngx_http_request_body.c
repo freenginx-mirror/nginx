@@ -771,7 +771,7 @@ ngx_http_discarded_request_body_handler(ngx_http_request_t *r)
     }
 
     if (r->lingering_time) {
-        timer = (ngx_msec_t) r->lingering_time - (ngx_msec_t) ngx_time();
+        timer = r->lingering_time - ngx_current_msec;
 
         if ((ngx_msec_int_t) timer <= 0) {
             r->discarding_body = 0;
@@ -811,8 +811,6 @@ ngx_http_discarded_request_body_handler(ngx_http_request_t *r)
     if (timer) {
 
         clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-
-        timer *= 1000;
 
         if (timer > clcf->lingering_timeout) {
             timer = clcf->lingering_timeout;

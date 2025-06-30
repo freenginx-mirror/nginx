@@ -717,8 +717,7 @@ ngx_http_v2_lingering_close(ngx_connection_t *c)
     }
 
     if (h2c->lingering_time == 0) {
-        h2c->lingering_time = ngx_time()
-                              + (time_t) (clcf->lingering_time / 1000);
+        h2c->lingering_time = ngx_current_msec + clcf->lingering_time;
     }
 
 #if (NGX_HTTP_SSL)
@@ -796,7 +795,7 @@ ngx_http_v2_lingering_close_handler(ngx_event_t *rev)
         return;
     }
 
-    timer = (ngx_msec_t) h2c->lingering_time - (ngx_msec_t) ngx_time();
+    timer = h2c->lingering_time - ngx_current_msec;
     if ((ngx_msec_int_t) timer <= 0) {
         ngx_http_close_connection(c);
         return;
@@ -825,7 +824,6 @@ ngx_http_v2_lingering_close_handler(ngx_event_t *rev)
 
     clcf = ngx_http_get_module_loc_conf(h2c->http_connection->conf_ctx,
                                         ngx_http_core_module);
-    timer *= 1000;
 
     if (timer > clcf->lingering_timeout) {
         timer = clcf->lingering_timeout;

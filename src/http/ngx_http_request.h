@@ -409,7 +409,7 @@ struct ngx_http_request_s {
 
     ngx_http_request_body_t          *request_body;
 
-    time_t                            lingering_time;
+    ngx_msec_t                        lingering_time;
     ngx_msec_t                        start_time;
 
     ngx_uint_t                        method;
