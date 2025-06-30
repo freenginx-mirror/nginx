@@ -1026,13 +1026,21 @@ ngx_mail_auth_oauthbearer(ngx_mail_session_t *s, ngx_connection_t *c,
 void
 ngx_mail_send(ngx_event_t *wev)
 {
+    off_t                      excess;
     ngx_int_t                  n;
+    ngx_msec_t                 delay;
+    ngx_msec_int_t             ms;
     ngx_connection_t          *c;
     ngx_mail_session_t        *s;
     ngx_mail_core_srv_conf_t  *cscf;
 
     c = wev->data;
     s = c->data;
+
+    if (wev->delayed && wev->timedout) {
+        wev->delayed = 0;
+        wev->timedout = 0;
+    }
 
     if (wev->timedout) {
         ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT, "client timed out");
@@ -1041,7 +1049,7 @@ ngx_mail_send(ngx_event_t *wev)
         return;
     }
 
-    if (s->out.len == 0) {
+    if (s->out.len == 0 || wev->delayed) {
         if (ngx_handle_write_event(wev, 0) != NGX_OK) {
             ngx_mail_close_connection(c);
         }
@@ -1049,11 +1057,47 @@ ngx_mail_send(ngx_event_t *wev)
         return;
     }
 
+    cscf = ngx_mail_get_module_srv_conf(s, ngx_mail_core_module);
+
+#if (NGX_SUPPRESS_WARN)
+    excess = 0;
+#endif
+
+    if (cscf->limit_rate) {
+        ms = (ngx_msec_int_t) (ngx_current_msec - s->limit_last);
+        ms = ngx_max(ms, 0);
+
+        excess = (off_t) (s->limit_excess
+                          - (uint64_t) cscf->limit_rate * ms / 1000);
+        excess = ngx_max(excess, 0);
+
+        if (excess > (off_t) cscf->limit_rate
+                     + (off_t) cscf->limit_rate_after)
+        {
+            wev->delayed = 1;
+            excess -= (off_t) cscf->limit_rate_after;
+            excess -= (off_t) cscf->limit_rate / 2;
+            delay = (ngx_msec_t) (excess * 1000 / cscf->limit_rate + 1);
+            ngx_add_timer(wev, delay);
+
+            if (ngx_handle_write_event(wev, 0) != NGX_OK) {
+                ngx_mail_close_connection(c);
+            }
+
+            return;
+        }
+    }
+
     n = c->send(c, s->out.data, s->out.len);
 
     if (n > 0) {
         s->out.data += n;
         s->out.len -= n;
+
+        if (cscf->limit_rate) {
+            s->limit_last = ngx_current_msec;
+            s->limit_excess = excess + n;
+        }
 
         if (s->out.len != 0) {
             goto again;

@@ -99,6 +99,20 @@ static ngx_command_t  ngx_mail_core_commands[] = {
       offsetof(ngx_mail_core_srv_conf_t, max_commands),
       NULL },
 
+    { ngx_string("limit_rate"),
+      NGX_MAIL_MAIN_CONF|NGX_MAIL_SRV_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_size_slot,
+      NGX_MAIL_SRV_CONF_OFFSET,
+      offsetof(ngx_mail_core_srv_conf_t, limit_rate),
+      NULL },
+
+    { ngx_string("limit_rate_after"),
+      NGX_MAIL_MAIN_CONF|NGX_MAIL_SRV_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_size_slot,
+      NGX_MAIL_SRV_CONF_OFFSET,
+      offsetof(ngx_mail_core_srv_conf_t, limit_rate_after),
+      NULL },
+
       ngx_null_command
 };
 
@@ -180,6 +194,9 @@ ngx_mail_core_create_srv_conf(ngx_conf_t *cf)
     cscf->max_errors = NGX_CONF_UNSET_UINT;
     cscf->max_commands = NGX_CONF_UNSET_UINT;
 
+    cscf->limit_rate = NGX_CONF_UNSET_SIZE;
+    cscf->limit_rate_after = NGX_CONF_UNSET_SIZE;
+
     cscf->resolver = NGX_CONF_UNSET_PTR;
 
     cscf->file_name = cf->conf_file->file.name.data;
@@ -201,6 +218,10 @@ ngx_mail_core_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
 
     ngx_conf_merge_uint_value(conf->max_errors, prev->max_errors, 5);
     ngx_conf_merge_uint_value(conf->max_commands, prev->max_commands, 1000);
+
+    ngx_conf_merge_size_value(conf->limit_rate, prev->limit_rate, 0);
+    ngx_conf_merge_size_value(conf->limit_rate_after, prev->limit_rate_after,
+                              0);
 
     ngx_conf_merge_str_value(conf->server_name, prev->server_name, "");
 

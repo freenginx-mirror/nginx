@@ -119,6 +119,9 @@ typedef struct {
     ngx_uint_t              max_errors;
     ngx_uint_t              max_commands;
 
+    size_t                  limit_rate;
+    size_t                  limit_rate_after;
+
     ngx_str_t               server_name;
 
     u_char                 *file_name;
@@ -247,6 +250,9 @@ typedef struct {
     ngx_uint_t              errors;
     ngx_uint_t              commands;
     ngx_uint_t              login_attempt;
+
+    ngx_msec_t              limit_last;
+    off_t                   limit_excess;
 
     /* used to parse POP3/IMAP/SMTP command */
 
