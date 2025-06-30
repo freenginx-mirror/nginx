@@ -359,6 +359,7 @@ struct ngx_http_core_loc_conf_s {
     off_t         directio_alignment;      /* directio_alignment */
 
     size_t        client_body_buffer_size; /* client_body_buffer_size */
+    size_t        client_body_min_rate;    /* client_body_min_rate */
     size_t        send_min_rate;           /* send_min_rate */
     size_t        send_lowat;              /* send_lowat */
     size_t        postpone_output;         /* postpone_output */

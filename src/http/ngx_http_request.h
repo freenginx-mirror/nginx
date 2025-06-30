@@ -303,6 +303,8 @@ typedef struct {
     ngx_buf_t                        *buf;
     off_t                             rest;
     off_t                             received;
+    ngx_msec_t                        rate_last;
+    off_t                             rate_excess;
     ngx_chain_t                      *free;
     ngx_chain_t                      *busy;
     ngx_http_chunked_t               *chunked;

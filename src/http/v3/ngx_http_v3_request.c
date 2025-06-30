@@ -1336,19 +1336,19 @@ ngx_http_v3_read_unbuffered_request_body(ngx_http_request_t *r)
 static ngx_int_t
 ngx_http_v3_do_read_client_request_body(ngx_http_request_t *r)
 {
-    off_t                      rest;
-    size_t                     size;
-    ssize_t                    n;
-    ngx_int_t                  rc;
-    ngx_uint_t                 flush;
-    ngx_chain_t                out;
-    ngx_connection_t          *c;
-    ngx_http_request_body_t   *rb;
-    ngx_http_core_loc_conf_t  *clcf;
+    off_t                     rest, bytes;
+    size_t                    size;
+    ssize_t                   n;
+    ngx_int_t                 rc;
+    ngx_uint_t                flush;
+    ngx_chain_t               out;
+    ngx_connection_t         *c;
+    ngx_http_request_body_t  *rb;
 
     c = r->connection;
     rb = r->request_body;
     flush = 1;
+    bytes = 0;
     n = NGX_AGAIN;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0,
@@ -1384,9 +1384,7 @@ ngx_http_v3_do_read_client_request_body(ngx_http_request_t *r)
                     }
 
                     if (rb->filter_need_buffering) {
-                        clcf = ngx_http_get_module_loc_conf(r,
-                                                         ngx_http_core_module);
-                        ngx_add_timer(c->read, clcf->client_body_timeout);
+                        ngx_http_request_body_timeout(r, bytes);
 
                         if (ngx_handle_read_event(c->read, 0) != NGX_OK) {
                             return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -1436,6 +1434,7 @@ ngx_http_v3_do_read_client_request_body(ngx_http_request_t *r)
             }
 
             rb->buf->last += n;
+            bytes += n;
 
             /* pass buffer to request body filter chain */
 
@@ -1475,8 +1474,7 @@ ngx_http_v3_do_read_client_request_body(ngx_http_request_t *r)
 
         if (n == NGX_AGAIN || !c->read->ready || rb->rest == 0) {
 
-            clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-            ngx_add_timer(c->read, clcf->client_body_timeout);
+            ngx_http_request_body_timeout(r, bytes);
 
             if (ngx_handle_read_event(c->read, 0) != NGX_OK) {
                 return NGX_HTTP_INTERNAL_SERVER_ERROR;

@@ -3986,7 +3986,7 @@ ngx_http_v2_read_request_body(ngx_http_request_t *r)
     }
 
     if (!buf) {
-        ngx_add_timer(r->connection->read, clcf->client_body_timeout);
+        ngx_http_request_body_timeout(r, 0);
     }
 
     r->read_event_handler = ngx_http_v2_read_client_request_body_handler;
@@ -4000,11 +4000,11 @@ static ngx_int_t
 ngx_http_v2_process_request_body(ngx_http_request_t *r, u_char *pos,
     size_t size, ngx_uint_t last, ngx_uint_t flush)
 {
-    size_t                     n;
-    ngx_int_t                  rc;
-    ngx_connection_t          *fc;
-    ngx_http_request_body_t   *rb;
-    ngx_http_core_loc_conf_t  *clcf;
+    off_t                     bytes;
+    size_t                    n;
+    ngx_int_t                 rc;
+    ngx_connection_t         *fc;
+    ngx_http_request_body_t  *rb;
 
     fc = r->connection;
     rb = r->request_body;
@@ -4015,6 +4015,8 @@ ngx_http_v2_process_request_body(ngx_http_request_t *r, u_char *pos,
     if (size == 0 && !last && !flush) {
         return NGX_AGAIN;
     }
+
+    bytes = 0;
 
     for ( ;; ) {
         for ( ;; ) {
@@ -4068,6 +4070,7 @@ ngx_http_v2_process_request_body(ngx_http_request_t *r, u_char *pos,
 
             pos += n;
             size -= n;
+            bytes += n;
 
             if (size == 0 && last) {
                 rb->rest = 0;
@@ -4094,8 +4097,7 @@ ngx_http_v2_process_request_body(ngx_http_request_t *r, u_char *pos,
         }
 
         if (size == 0) {
-            clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-            ngx_add_timer(fc->read, clcf->client_body_timeout);
+            ngx_http_request_body_timeout(r, bytes);
 
             if (!flush) {
                 ngx_post_event(fc->read, &ngx_posted_events);

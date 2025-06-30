@@ -167,6 +167,7 @@ void ngx_http_test_reading(ngx_http_request_t *r);
 
 
 void ngx_http_send_timeout(ngx_http_request_t *r, off_t sent);
+void ngx_http_request_body_timeout(ngx_http_request_t *r, off_t bytes);
 
 
 char *ngx_http_types_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);

@@ -12,6 +12,8 @@
 
 static void ngx_http_read_client_request_body_handler(ngx_http_request_t *r);
 static ngx_int_t ngx_http_do_read_client_request_body(ngx_http_request_t *r);
+static ngx_int_t ngx_http_request_body_min_rate(ngx_http_request_t *r,
+    off_t bytes);
 static ngx_int_t ngx_http_copy_pipelined_header(ngx_http_request_t *r,
     ngx_buf_t *buf);
 static ngx_int_t ngx_http_write_request_body(ngx_http_request_t *r);
@@ -84,6 +86,7 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
      *     rb->busy = NULL;
      *     rb->chunked = NULL;
      *     rb->received = 0;
+     *     rb->rate_last = 0;
      *     rb->no_buffering = 0;
      *     rb->filter_need_buffering = 0;
      *     rb->last_sent = 0;
@@ -334,19 +337,19 @@ ngx_http_read_client_request_body_handler(ngx_http_request_t *r)
 static ngx_int_t
 ngx_http_do_read_client_request_body(ngx_http_request_t *r)
 {
-    off_t                      rest;
-    size_t                     size;
-    ssize_t                    n;
-    ngx_int_t                  rc;
-    ngx_uint_t                 flush;
-    ngx_chain_t                out;
-    ngx_connection_t          *c;
-    ngx_http_request_body_t   *rb;
-    ngx_http_core_loc_conf_t  *clcf;
+    off_t                     rest, bytes;
+    size_t                    size;
+    ssize_t                   n;
+    ngx_int_t                 rc;
+    ngx_uint_t                flush;
+    ngx_chain_t               out;
+    ngx_connection_t         *c;
+    ngx_http_request_body_t  *rb;
 
     c = r->connection;
     rb = r->request_body;
     flush = 1;
+    bytes = 0;
     n = NGX_AGAIN;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0,
@@ -382,9 +385,7 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
                     }
 
                     if (rb->filter_need_buffering) {
-                        clcf = ngx_http_get_module_loc_conf(r,
-                                                         ngx_http_core_module);
-                        ngx_add_timer(c->read, clcf->client_body_timeout);
+                        ngx_http_request_body_timeout(r, bytes);
 
                         if (ngx_handle_read_event(c->read, 0) != NGX_OK) {
                             return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -436,6 +437,7 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
 
             rb->buf->last += n;
             r->request_length += n;
+            bytes += n;
 
             /* pass buffer to request body filter chain */
 
@@ -475,8 +477,7 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
 
         if (n == NGX_AGAIN || !c->read->ready || rb->rest == 0) {
 
-            clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-            ngx_add_timer(c->read, clcf->client_body_timeout);
+            ngx_http_request_body_timeout(r, bytes);
 
             if (ngx_handle_read_event(c->read, 0) != NGX_OK) {
                 return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -501,6 +502,67 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
     }
 
     return NGX_OK;
+}
+
+
+void
+ngx_http_request_body_timeout(ngx_http_request_t *r, off_t bytes)
+{
+    ngx_http_core_loc_conf_t  *clcf;
+
+    if (!ngx_http_request_body_min_rate(r, bytes)) {
+        return;
+    }
+
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+    ngx_add_timer(r->connection->read, clcf->client_body_timeout);
+}
+
+
+static ngx_int_t
+ngx_http_request_body_min_rate(ngx_http_request_t *r, off_t bytes)
+{
+    ngx_msec_t                 now;
+    ngx_msec_int_t             ms;
+    ngx_connection_t          *c;
+    ngx_http_request_body_t   *rb;
+    ngx_http_core_loc_conf_t  *clcf;
+
+    c = r->connection;
+    rb = r->request_body;
+
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+
+    if (clcf->client_body_min_rate == 0) {
+        return (bytes > 0 || !c->read->timer_set);
+    }
+
+    now = ngx_current_msec;
+
+    if (rb->rate_last == 0 || !c->read->timer_set) {
+        rb->rate_last = now;
+        rb->rate_excess = 0;
+        return 1;
+    }
+
+    ms = (ngx_msec_int_t) (now - rb->rate_last);
+    ms = ngx_max(ms, 0);
+
+    ngx_log_debug3(NGX_LOG_DEBUG_HTTP, c->log, 0,
+                   "http body min rate: %O, %O, %M",
+                   bytes, rb->rate_excess, ms);
+
+    if (rb->rate_excess + bytes
+        > (off_t) clcf->client_body_min_rate * ms / 1000)
+    {
+        rb->rate_last = now;
+        rb->rate_excess = 0;
+        return 1;
+    }
+
+    rb->rate_excess += bytes;
+
+    return 0;
 }
 
 
