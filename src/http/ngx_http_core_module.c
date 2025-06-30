@@ -472,6 +472,13 @@ static ngx_command_t  ngx_http_core_commands[] = {
       offsetof(ngx_http_core_loc_conf_t, send_timeout),
       NULL },
 
+    { ngx_string("send_min_rate"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_size_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_core_loc_conf_t, send_min_rate),
+      NULL },
+
     { ngx_string("send_lowat"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_size_slot,
@@ -3609,6 +3616,7 @@ ngx_http_core_create_loc_conf(ngx_conf_t *cf)
     clcf->tcp_nopush = NGX_CONF_UNSET;
     clcf->tcp_nodelay = NGX_CONF_UNSET;
     clcf->send_timeout = NGX_CONF_UNSET_MSEC;
+    clcf->send_min_rate = NGX_CONF_UNSET_SIZE;
     clcf->send_lowat = NGX_CONF_UNSET_SIZE;
     clcf->postpone_output = NGX_CONF_UNSET_SIZE;
     clcf->limit_rate = NGX_CONF_UNSET_PTR;
@@ -3840,6 +3848,7 @@ ngx_http_core_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_value(conf->tcp_nodelay, prev->tcp_nodelay, 1);
 
     ngx_conf_merge_msec_value(conf->send_timeout, prev->send_timeout, 60000);
+    ngx_conf_merge_size_value(conf->send_min_rate, prev->send_min_rate, 0);
     ngx_conf_merge_size_value(conf->send_lowat, prev->send_lowat, 0);
     ngx_conf_merge_size_value(conf->postpone_output, prev->postpone_output,
                               1460);

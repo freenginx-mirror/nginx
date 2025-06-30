@@ -94,6 +94,10 @@ struct ngx_event_pipe_s {
     ngx_msec_t         limit_last;
     off_t              limit_excess;
 
+    size_t             send_min_rate;
+    ngx_msec_t         send_min_last;
+    off_t              send_min_excess;
+
     ngx_temp_file_t   *temp_file;
 
     /* STUB */ int     num;

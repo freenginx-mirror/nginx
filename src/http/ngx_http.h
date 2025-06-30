@@ -166,6 +166,9 @@ void ngx_http_block_reading(ngx_http_request_t *r);
 void ngx_http_test_reading(ngx_http_request_t *r);
 
 
+void ngx_http_send_timeout(ngx_http_request_t *r, off_t sent);
+
+
 char *ngx_http_types_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char *ngx_http_merge_types(ngx_conf_t *cf, ngx_array_t **keys,
     ngx_hash_t *types_hash, ngx_array_t **prev_keys,

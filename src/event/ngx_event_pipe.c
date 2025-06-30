@@ -17,6 +17,7 @@ static ngx_int_t ngx_event_pipe_write_to_downstream(ngx_event_pipe_t *p);
 static ngx_int_t ngx_event_pipe_write_chain_to_temp_file(ngx_event_pipe_t *p);
 static ngx_inline void ngx_event_pipe_remove_shadow_links(ngx_buf_t *buf);
 static ngx_int_t ngx_event_pipe_drain_chains(ngx_event_pipe_t *p);
+static ngx_int_t ngx_event_pipe_min_rate(ngx_event_pipe_t *p, off_t sent);
 
 
 ngx_int_t
@@ -91,7 +92,7 @@ ngx_event_pipe(ngx_event_pipe_t *p, ngx_int_t do_write)
 
         if (!wev->delayed) {
             if (wev->active && !wev->ready) {
-                if (p->downstream->sent != sent || !wev->timer_set) {
+                if (ngx_event_pipe_min_rate(p, p->downstream->sent - sent)) {
                     ngx_add_timer(wev, p->send_timeout);
                 }
 
@@ -1169,4 +1170,43 @@ ngx_event_pipe_drain_chains(ngx_event_pipe_t *p)
             cl = tl;
         }
     }
+}
+
+
+static ngx_int_t
+ngx_event_pipe_min_rate(ngx_event_pipe_t *p, off_t sent)
+{
+    ngx_msec_t      now;
+    ngx_msec_int_t  ms;
+
+    if (p->send_min_rate == 0) {
+        return (sent > 0 || !p->downstream->write->timer_set);
+    }
+
+    now = ngx_current_msec;
+
+    if (p->send_min_last == 0 || !p->downstream->write->timer_set) {
+        p->send_min_last = now;
+        p->send_min_excess = 0;
+        return 1;
+    }
+
+    ms = (ngx_msec_int_t) (now - p->send_min_last);
+    ms = ngx_max(ms, 0);
+
+    ngx_log_debug3(NGX_LOG_DEBUG_EVENT, p->log, 0,
+                   "pipe min rate: %O, %O, %M",
+                   sent, p->send_min_excess, ms);
+
+    if (p->send_min_excess + sent
+        > (off_t) p->send_min_rate * ms / 1000)
+    {
+        p->send_min_last = now;
+        p->send_min_excess = 0;
+        return 1;
+    }
+
+    p->send_min_excess += sent;
+
+    return 0;
 }

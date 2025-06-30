@@ -164,6 +164,9 @@ struct ngx_http_v2_connection_s {
 
     ngx_msec_t                       lingering_time;
 
+    ngx_msec_t                       send_min_last;
+    off_t                            send_min_excess;
+
     unsigned                         settings_ack:1;
     unsigned                         table_update:1;
     unsigned                         blocked:1;

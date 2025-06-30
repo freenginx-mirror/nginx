@@ -51,6 +51,8 @@
 
 static void ngx_http_v2_read_handler(ngx_event_t *rev);
 static void ngx_http_v2_write_handler(ngx_event_t *wev);
+static ngx_int_t ngx_http_v2_send_min_rate(ngx_http_v2_connection_t *h2c,
+    off_t sent);
 static void ngx_http_v2_handle_connection(ngx_http_v2_connection_t *h2c);
 static void ngx_http_v2_lingering_close(ngx_connection_t *c);
 static void ngx_http_v2_lingering_close_handler(ngx_event_t *rev);
@@ -595,7 +597,7 @@ ngx_http_v2_send_output_queue(ngx_http_v2_connection_t *h2c)
     h2c->last_out = frame;
 
     if (!wev->ready) {
-        if (c->sent != sent || !wev->timer_set) {
+        if (ngx_http_v2_send_min_rate(h2c, c->sent - sent)) {
             ngx_add_timer(wev, clcf->send_timeout);
         }
 
@@ -617,6 +619,52 @@ error:
     }
 
     return NGX_ERROR;
+}
+
+
+static ngx_int_t
+ngx_http_v2_send_min_rate(ngx_http_v2_connection_t *h2c, off_t sent)
+{
+    ngx_msec_t                 now;
+    ngx_msec_int_t             ms;
+    ngx_connection_t          *c;
+    ngx_http_core_loc_conf_t  *clcf;
+
+    c = h2c->connection;
+
+    clcf = ngx_http_get_module_loc_conf(h2c->http_connection->conf_ctx,
+                                        ngx_http_core_module);
+
+    if (clcf->send_min_rate == 0) {
+        return (sent > 0 || !c->write->timer_set);
+    }
+
+    now = ngx_current_msec;
+
+    if (h2c->send_min_last == 0 || !c->write->timer_set) {
+        h2c->send_min_last = now;
+        h2c->send_min_excess = 0;
+        return 1;
+    }
+
+    ms = (ngx_msec_int_t) (now - h2c->send_min_last);
+    ms = ngx_max(ms, 0);
+
+    ngx_log_debug3(NGX_LOG_DEBUG_HTTP, c->log, 0,
+                   "http2 min rate: %O, %O, %M",
+                   sent, h2c->send_min_excess, ms);
+
+    if (h2c->send_min_excess + sent
+        > (off_t) clcf->send_min_rate * ms / 1000)
+    {
+        h2c->send_min_last = now;
+        h2c->send_min_excess = 0;
+        return 1;
+    }
+
+    h2c->send_min_excess += sent;
+
+    return 0;
 }
 
 

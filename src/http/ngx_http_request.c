@@ -39,6 +39,7 @@ static void ngx_http_terminate_handler(ngx_http_request_t *r);
 static void ngx_http_finalize_connection(ngx_http_request_t *r);
 static ngx_int_t ngx_http_set_write_handler(ngx_http_request_t *r);
 static void ngx_http_writer(ngx_http_request_t *r);
+static ngx_int_t ngx_http_send_min_rate(ngx_http_request_t *r, off_t sent);
 static void ngx_http_request_finalizer(ngx_http_request_t *r);
 
 static void ngx_http_set_keepalive(ngx_http_request_t *r);
@@ -2834,11 +2835,11 @@ ngx_http_set_write_handler(ngx_http_request_t *r)
         return NGX_OK;
     }
 
-    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
     if (!wev->delayed) {
-        ngx_add_timer(wev, clcf->send_timeout);
+        ngx_http_send_timeout(r, 0);
     }
 
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
     if (ngx_handle_write_event(wev, clcf->send_lowat) != NGX_OK) {
         ngx_http_close_request(r, 0);
         return NGX_ERROR;
@@ -2879,7 +2880,7 @@ ngx_http_writer(ngx_http_request_t *r)
                        "http writer delayed");
 
         if (!wev->delayed) {
-            ngx_add_timer(wev, clcf->send_timeout);
+            ngx_http_send_timeout(r, 0);
         }
 
         if (ngx_handle_write_event(wev, clcf->send_lowat) != NGX_OK) {
@@ -2904,8 +2905,8 @@ ngx_http_writer(ngx_http_request_t *r)
 
     if (r->buffered || r->postponed || (r == r->main && c->buffered)) {
 
-        if (!wev->delayed && (c->sent != sent || !wev->timer_set)) {
-            ngx_add_timer(wev, clcf->send_timeout);
+        if (!wev->delayed) {
+            ngx_http_send_timeout(r, c->sent - sent);
         }
 
         if (ngx_handle_write_event(wev, clcf->send_lowat) != NGX_OK) {
@@ -2921,6 +2922,66 @@ ngx_http_writer(ngx_http_request_t *r)
     r->write_event_handler = ngx_http_request_empty_handler;
 
     ngx_http_finalize_request(r, rc);
+}
+
+
+void
+ngx_http_send_timeout(ngx_http_request_t *r, off_t sent)
+{
+    ngx_http_core_loc_conf_t  *clcf;
+
+    if (!ngx_http_send_min_rate(r, sent)) {
+        return;
+    }
+
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+    ngx_add_timer(r->connection->write, clcf->send_timeout);
+}
+
+
+static ngx_int_t
+ngx_http_send_min_rate(ngx_http_request_t *r, off_t sent)
+{
+    ngx_msec_t                 now;
+    ngx_msec_int_t             ms;
+    ngx_connection_t          *c;
+    ngx_http_core_loc_conf_t  *clcf;
+
+    r = r->main;
+    c = r->connection;
+
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+
+    if (clcf->send_min_rate == 0) {
+        return (sent > 0 || !c->write->timer_set);
+    }
+
+    now = ngx_current_msec;
+
+    if (r->send_min_last == 0 || !c->write->timer_set) {
+        r->send_min_last = now;
+        r->send_min_excess = 0;
+        return 1;
+    }
+
+    ms = (ngx_msec_int_t) (now - r->send_min_last);
+    ms = ngx_max(ms, 0);
+
+    ngx_log_debug3(NGX_LOG_DEBUG_HTTP, c->log, 0,
+                   "http min rate: %O, %O, %M",
+                   sent, r->send_min_excess, ms);
+
+    if (r->send_min_excess + sent
+        > (off_t) clcf->send_min_rate * ms / 1000)
+    {
+        r->send_min_last = now;
+        r->send_min_excess = 0;
+        return 1;
+    }
+
+    r->send_min_excess += sent;
+
+    return 0;
 }
 
 
