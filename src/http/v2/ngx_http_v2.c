@@ -460,8 +460,8 @@ ngx_http_v2_write_handler(ngx_event_t *wev)
     h2c = c->data;
 
     if (wev->timedout) {
-        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0,
-                       "http2 write event timed out");
+        ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT,
+                      "client timed out");
         c->error = 1;
         c->timedout = 1;
         ngx_http_v2_finalize_connection(h2c, 0);
