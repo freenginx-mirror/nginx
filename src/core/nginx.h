@@ -12,6 +12,8 @@
 #define nginx_version      1029000
 #define NGINX_VERSION      "1.29.0"
 
+#define freenginx          1
+
 #define NGINX_NAME         "freenginx"
 #define NGINX_VER          NGINX_NAME "/" NGINX_VERSION
 
