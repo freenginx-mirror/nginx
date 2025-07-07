@@ -57,6 +57,8 @@ struct ngx_mail_auth_http_ctx_s {
 
     time_t                          sleep;
 
+    ngx_list_t                      headers;
+
     ngx_pool_t                     *pool;
 };
 
@@ -191,6 +193,14 @@ ngx_mail_auth_http_init(ngx_mail_session_t *s)
 
     ctx->request = ngx_mail_auth_http_create_request(s, pool, ahcf);
     if (ctx->request == NULL) {
+        ngx_destroy_pool(ctx->pool);
+        ngx_mail_session_internal_server_error(s);
+        return;
+    }
+
+    if (ngx_list_init(&ctx->headers, pool, 8, sizeof(ngx_table_elt_t))
+        != NGX_OK)
+    {
         ngx_destroy_pool(ctx->pool);
         ngx_mail_session_internal_server_error(s);
         return;
@@ -467,11 +477,12 @@ static void
 ngx_mail_auth_http_process_headers(ngx_mail_session_t *s,
     ngx_mail_auth_http_ctx_t *ctx)
 {
-    u_char      *p;
-    time_t       timer;
-    size_t       len, size;
-    ngx_int_t    rc, port, n;
-    ngx_addr_t  *peer;
+    u_char           *p;
+    time_t            timer;
+    size_t            len, size;
+    ngx_int_t         rc, port, n;
+    ngx_addr_t       *peer;
+    ngx_table_elt_t  *h;
 
     ngx_log_debug0(NGX_LOG_DEBUG_MAIL, s->connection->log, 0,
                    "mail auth http process headers");
@@ -481,20 +492,24 @@ ngx_mail_auth_http_process_headers(ngx_mail_session_t *s,
 
         if (rc == NGX_OK) {
 
-#if (NGX_DEBUG)
-            {
-            ngx_str_t  key, value;
+            /* a header line has been parsed successfully */
 
-            key.len = ctx->header_name_end - ctx->header_name_start;
-            key.data = ctx->header_name_start;
-            value.len = ctx->header_end - ctx->header_start;
-            value.data = ctx->header_start;
+            h = ngx_list_push(&ctx->headers);
+            if (h == NULL) {
+                ngx_close_connection(ctx->peer.connection);
+                ngx_destroy_pool(ctx->pool);
+                ngx_mail_session_internal_server_error(s);
+                return;
+            }
+
+            h->key.len = ctx->header_name_end - ctx->header_name_start;
+            h->key.data = ctx->header_name_start;
+            h->value.len = ctx->header_end - ctx->header_start;
+            h->value.data = ctx->header_start;
 
             ngx_log_debug2(NGX_LOG_DEBUG_MAIL, s->connection->log, 0,
                            "mail auth http header: \"%V: %V\"",
-                           &key, &value);
-            }
-#endif
+                           &h->key, &h->value);
 
             len = ctx->header_name_end - ctx->header_name_start;
 
@@ -880,6 +895,13 @@ ngx_mail_auth_http_process_headers(ngx_mail_session_t *s,
             peer->name.data[len++] = ':';
 
             ngx_memcpy(peer->name.data + len, ctx->port.data, ctx->port.len);
+
+            /* check connection limits */
+
+            if (ngx_mail_limit_conn_handler(s) != NGX_OK) {
+                ngx_destroy_pool(ctx->pool);
+                return;
+            }
 
             ngx_destroy_pool(ctx->pool);
             ngx_mail_proxy_init(s, peer);
@@ -1585,6 +1607,107 @@ ngx_mail_auth_http_escape(ngx_pool_t *pool, ngx_str_t *text, ngx_str_t *escaped)
     (void) ngx_escape_uri(p, text->data, text->len, NGX_ESCAPE_MAIL_AUTH);
 
     escaped->data = p;
+
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_mail_auth_http_header_value(ngx_mail_session_t *s, ngx_str_t *name,
+    ngx_str_t *value)
+{
+    u_char                    *p, ch;
+    size_t                     len;
+    ngx_uint_t                 i, n;
+    ngx_list_part_t           *part;
+    ngx_table_elt_t           *header, *h, **ph;
+    ngx_mail_auth_http_ctx_t  *ctx;
+
+    ctx = ngx_mail_get_module_ctx(s, ngx_mail_auth_http_module);
+
+    ph = &h;
+    len = 0;
+
+    part = &ctx->headers.part;
+    header = part->elts;
+
+    for (i = 0; /* void */ ; i++) {
+
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                break;
+            }
+
+            part = part->next;
+            header = part->elts;
+            i = 0;
+        }
+
+        if (header[i].key.len != name->len) {
+            continue;
+        }
+
+        for (n = 0; n < name->len; n++) {
+            ch = header[i].key.data[n];
+
+            if (ch >= 'A' && ch <= 'Z') {
+                ch |= 0x20;
+
+            } else if (ch == '-') {
+                ch = '_';
+            }
+
+            if (name->data[n] != ch) {
+                break;
+            }
+        }
+
+
+        if (n != name->len) {
+            continue;
+        }
+
+        len += header[i].value.len + 2;
+
+        *ph = &header[i];
+        ph = &header[i].next;
+    }
+
+    *ph = NULL;
+
+    if (h == NULL) {
+        value->len = 0;
+        value->data = NULL;
+        return NGX_OK;
+    }
+
+    len -= 2;
+
+    if (h->next == NULL) {
+        *value = h->value;
+        return NGX_OK;
+    }
+
+    p = ngx_pnalloc(ctx->pool, len);
+    if (p == NULL) {
+        return NGX_ERROR;
+    }
+
+    value->len = len;
+    value->data = p;
+
+    for ( ;; ) {
+
+        p = ngx_copy(p, h->value.data, h->value.len);
+
+        if (h->next == NULL) {
+            break;
+        }
+
+        *p++ = ','; *p++ = ' ';
+
+        h = h->next;
+    }
 
     return NGX_OK;
 }

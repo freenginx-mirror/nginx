@@ -21,6 +21,7 @@ static ngx_str_t  ngx_mail_pop3_default_capabilities[] = {
     ngx_string("TOP"),
     ngx_string("USER"),
     ngx_string("UIDL"),
+    ngx_string("RESP-CODES"),
     ngx_null_string
 };
 
