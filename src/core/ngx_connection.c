@@ -1619,11 +1619,9 @@ ngx_connection_error(ngx_connection_t *c, ngx_err_t err, char *text)
         return 0;
     }
 
-#if (NGX_SOLARIS)
     if (err == NGX_EINVAL && c->log_error == NGX_ERROR_IGNORE_EINVAL) {
         return 0;
     }
-#endif
 
     if (err == NGX_EMSGSIZE && c->log_error == NGX_ERROR_IGNORE_EMSGSIZE) {
         return 0;

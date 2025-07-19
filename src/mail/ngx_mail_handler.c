@@ -1330,6 +1330,10 @@ ngx_mail_lingering_close(ngx_connection_t *c)
     }
 
     if (ngx_shutdown_socket(c->fd, NGX_WRITE_SHUTDOWN) == -1) {
+#if (defined __NetBSD__)
+        /* NetBSD returns EINVAL if the connection was reset */
+        c->log_error = NGX_ERROR_IGNORE_EINVAL;
+#endif
         ngx_connection_error(c, ngx_socket_errno,
                              ngx_shutdown_socket_n " failed");
         ngx_mail_close_connection(c);
