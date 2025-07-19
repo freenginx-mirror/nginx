@@ -217,15 +217,26 @@ typedef int                 sig_atomic_t;
 #define NGX_PTR_SIZE            8
 #define NGX_SIZE_T_LEN          (sizeof("-9223372036854775808") - 1)
 #define NGX_MAX_SIZE_T_VALUE    9223372036854775807
-#define NGX_TIME_T_LEN          (sizeof("-9223372036854775808") - 1)
-#define NGX_TIME_T_SIZE         8
-#define NGX_MAX_TIME_T_VALUE    9223372036854775807
 
 #else
 
 #define NGX_PTR_SIZE            4
 #define NGX_SIZE_T_LEN          (sizeof("-2147483648") - 1)
 #define NGX_MAX_SIZE_T_VALUE    2147483647
+
+#endif
+
+
+#if (defined _WIN64 || (_MSC_VER >= 1400 && !defined _USE_32BIT_TIME_T))
+
+/* MSVC 2005 uses 64-bit time_t on 32-bit platforms by default */
+
+#define NGX_TIME_T_LEN          (sizeof("-9223372036854775808") - 1)
+#define NGX_TIME_T_SIZE         8
+#define NGX_MAX_TIME_T_VALUE    9223372036854775807
+
+#else
+
 #define NGX_TIME_T_LEN          (sizeof("-2147483648") - 1)
 #define NGX_TIME_T_SIZE         4
 #define NGX_MAX_TIME_T_VALUE    2147483647
