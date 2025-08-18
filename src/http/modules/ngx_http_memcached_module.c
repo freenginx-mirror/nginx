@@ -422,7 +422,6 @@ found:
         }
 
         u->headers_in.status_n = 200;
-        u->state->status = 200;
         u->buffer.pos = p + sizeof(CRLF) - 1;
 
         return NGX_OK;
@@ -434,7 +433,6 @@ found:
 
         u->headers_in.content_length_n = 0;
         u->headers_in.status_n = 404;
-        u->state->status = 404;
         u->buffer.pos = p + sizeof("END" CRLF) - 1;
         u->keepalive = 1;
 

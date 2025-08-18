@@ -1849,15 +1849,7 @@ ngx_http_proxy_process_status_line(ngx_http_request_t *r)
         u->headers_in.status_n = 200;
         u->headers_in.connection_close = 1;
 
-        if (u->state && u->state->status == 0) {
-            u->state->status = NGX_HTTP_OK;
-        }
-
         return NGX_OK;
-    }
-
-    if (u->state && u->state->status == 0) {
-        u->state->status = ctx->status.code;
     }
 
     u->headers_in.status_n = ctx->status.code;

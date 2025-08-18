@@ -1032,10 +1032,6 @@ ngx_http_scgi_process_status_line(ngx_http_request_t *r)
         return ngx_http_scgi_process_header(r);
     }
 
-    if (u->state && u->state->status == 0) {
-        u->state->status = status->code;
-    }
-
     u->headers_in.status_n = status->code;
 
     len = status->end - status->start;
@@ -1166,10 +1162,6 @@ ngx_http_scgi_process_header(ngx_http_request_t *r)
             } else {
                 u->headers_in.status_n = 200;
                 ngx_str_set(&u->headers_in.status_line, "200 OK");
-            }
-
-            if (u->state && u->state->status == 0) {
-                u->state->status = u->headers_in.status_n;
             }
 
         done:

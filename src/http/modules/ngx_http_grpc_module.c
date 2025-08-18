@@ -1867,10 +1867,6 @@ ngx_http_grpc_process_header(ngx_http_request_t *r)
 
                     u->headers_in.status_n = status;
 
-                    if (u->state && u->state->status == 0) {
-                        u->state->status = status;
-                    }
-
                     ctx->status = 1;
 
                     continue;

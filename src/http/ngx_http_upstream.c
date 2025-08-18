@@ -2535,6 +2535,7 @@ ngx_http_upstream_process_header(ngx_http_request_t *r, ngx_http_upstream_t *u)
 
     /* rc == NGX_OK */
 
+    u->state->status = u->headers_in.status_n;
     u->state->header_time = ngx_current_msec - u->start_time;
 
     if (u->headers_in.status_n >= NGX_HTTP_SPECIAL_RESPONSE) {
