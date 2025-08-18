@@ -2063,6 +2063,19 @@ ngx_http_fastcgi_process_header(ngx_http_request_t *r)
                     ngx_str_set(&u->headers_in.status_line, "200 OK");
                 }
 
+                if (u->headers_in.status_n < NGX_HTTP_OK) {
+
+                    /* reject 1xx responses */
+
+                    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                                  "upstream sent unexpected status \"%V\"",
+                                  u->headers_in.status_line.len
+                                  ? &u->headers_in.status_line
+                                  : &u->headers_in.status->value);
+
+                    return NGX_HTTP_UPSTREAM_INVALID_HEADER;
+                }
+
                 break;
             }
 
