@@ -2469,25 +2469,11 @@ ngx_http_upstream_process_header(ngx_http_request_t *r, ngx_http_upstream_t *u)
 
     for ( ;; ) {
 
-        if (c->read->ready) {
-            n = c->recv(c, u->buffer.last, u->buffer.end - u->buffer.last);
-
-        } else {
-            n = NGX_AGAIN;
-        }
+        n = c->recv(c, u->buffer.last, u->buffer.end - u->buffer.last);
 
         if (n == NGX_AGAIN) {
-#if 0
-            ngx_add_timer(rev, u->read_timeout);
-#endif
-
-            if (ngx_handle_read_event(c->read, 0) != NGX_OK) {
-                ngx_http_upstream_finalize_request(r, u,
-                                               NGX_HTTP_INTERNAL_SERVER_ERROR);
-                return;
-            }
-
-            return;
+            rc = NGX_AGAIN;
+            break;
         }
 
         if (n == 0) {
@@ -2501,14 +2487,7 @@ ngx_http_upstream_process_header(ngx_http_request_t *r, ngx_http_upstream_t *u)
         }
 
         u->state->bytes_received += n;
-
         u->buffer.last += n;
-
-#if 0
-        u->valid_header_in = 0;
-
-        u->peer.cached = 0;
-#endif
 
         rc = u->process_header(r);
 
@@ -2523,10 +2502,24 @@ ngx_http_upstream_process_header(ngx_http_request_t *r, ngx_http_upstream_t *u)
                 return;
             }
 
+            if (!c->read->ready) {
+                break;
+            }
+
             continue;
         }
 
         break;
+    }
+
+    if (rc == NGX_AGAIN) {
+        if (ngx_handle_read_event(c->read, 0) != NGX_OK) {
+            ngx_http_upstream_finalize_request(r, u,
+                                               NGX_HTTP_INTERNAL_SERVER_ERROR);
+            return;
+        }
+
+        return;
     }
 
     if (rc == NGX_HTTP_UPSTREAM_INVALID_HEADER) {
