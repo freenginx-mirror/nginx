@@ -1826,27 +1826,15 @@ ngx_http_proxy_process_status_line(ngx_http_request_t *r)
 
     if (rc == NGX_ERROR) {
 
-#if (NGX_HTTP_CACHE)
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "http proxy no HTTP/1.0 header");
 
-        if (r->cache) {
-            r->http_version = NGX_HTTP_VERSION_9;
-            return NGX_OK;
-        }
-
-#endif
-
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                      "upstream sent no valid HTTP/1.0 header");
-
-#if 0
-        if (u->accel) {
-            return NGX_HTTP_UPSTREAM_INVALID_HEADER;
-        }
-#endif
-
-        r->http_version = NGX_HTTP_VERSION_9;
-        u->state->status = NGX_HTTP_OK;
+        u->headers_in.status_n = 200;
         u->headers_in.connection_close = 1;
+
+        if (u->state && u->state->status == 0) {
+            u->state->status = NGX_HTTP_OK;
+        }
 
         return NGX_OK;
     }
