@@ -82,6 +82,7 @@ typedef struct {
 
     ngx_uint_t                 pings;
     ngx_uint_t                 settings;
+    ngx_uint_t                 headers;
 
     off_t                      length;
 
@@ -1218,6 +1219,7 @@ ngx_http_grpc_reinit_request(ngx_http_request_t *r)
     ctx->connection = NULL;
     ctx->pings = 0;
     ctx->settings = 0;
+    ctx->headers = 0;
 
     return NGX_OK;
 }
@@ -1860,13 +1862,6 @@ ngx_http_grpc_process_header(ngx_http_request_t *r)
                         return NGX_HTTP_UPSTREAM_INVALID_HEADER;
                     }
 
-                    if (status < NGX_HTTP_OK) {
-                        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                                      "upstream sent unexpected :status \"%V\"",
-                                      status_line);
-                        return NGX_HTTP_UPSTREAM_INVALID_HEADER;
-                    }
-
                     u->headers_in.status_n = status;
 
                     ctx->status = 1;
@@ -1909,6 +1904,44 @@ ngx_http_grpc_process_header(ngx_http_request_t *r)
 
                 ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                                "grpc header done");
+
+                if (u->headers_in.status_n == NGX_HTTP_SWITCHING_PROTOCOLS
+                    || u->headers_in.status_n < NGX_HTTP_CONTINUE)
+                {
+                    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                                  "upstream sent unexpected status \"%03ui\"",
+                                  u->headers_in.status_n);
+
+                    return NGX_HTTP_UPSTREAM_INVALID_HEADER;
+
+                } else if (u->headers_in.status_n < NGX_HTTP_OK) {
+
+                    /* ignore unexpected 1xx responses */
+
+                    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                                   "grpc 1xx ignored");
+
+                    if (ctx->end_stream) {
+                        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                                      "upstream sent 1xx response "
+                                      "with end stream flag");
+                        return NGX_HTTP_UPSTREAM_INVALID_HEADER;
+                    }
+
+                    if (ctx->headers++ > 10) {
+                        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                                      "upstream sent too many 1xx responses");
+                        return NGX_HTTP_UPSTREAM_INVALID_HEADER;
+                    }
+
+                    if (ngx_http_upstream_clear_headers(r, u) != NGX_OK) {
+                        return NGX_ERROR;
+                    }
+
+                    ctx->status = 0;
+
+                    break;
+                }
 
                 if (ctx->end_stream) {
                     u->headers_in.content_length_n = 0;

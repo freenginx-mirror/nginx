@@ -45,8 +45,6 @@ static void ngx_http_upstream_connect(ngx_http_request_t *r,
     ngx_http_upstream_t *u);
 static ngx_int_t ngx_http_upstream_reinit(ngx_http_request_t *r,
     ngx_http_upstream_t *u);
-static ngx_int_t ngx_http_upstream_clear_headers(ngx_http_request_t *r,
-    ngx_http_upstream_t *u);
 static void ngx_http_upstream_send_request(ngx_http_request_t *r,
     ngx_http_upstream_t *u, ngx_uint_t do_write);
 static ngx_int_t ngx_http_upstream_send_request_body(ngx_http_request_t *r,
@@ -2070,7 +2068,7 @@ ngx_http_upstream_reinit(ngx_http_request_t *r, ngx_http_upstream_t *u)
 }
 
 
-static ngx_int_t
+ngx_int_t
 ngx_http_upstream_clear_headers(ngx_http_request_t *r, ngx_http_upstream_t *u)
 {
     if (u->headers_in.headers.last) {

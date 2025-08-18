@@ -1158,10 +1158,9 @@ ngx_http_scgi_process_header(ngx_http_request_t *r)
             {
                 u->upgrade = 1;
 
-            } else if (u->headers_in.status_n < NGX_HTTP_OK) {
-
-                /* reject unexpected 1xx responses */
-
+            } else if (u->headers_in.status_n == NGX_HTTP_SWITCHING_PROTOCOLS
+                       || u->headers_in.status_n < NGX_HTTP_CONTINUE)
+            {
                 ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                               "upstream sent unexpected status \"%V\"",
                               u->headers_in.status_line.len
@@ -1169,6 +1168,21 @@ ngx_http_scgi_process_header(ngx_http_request_t *r)
                               : &u->headers_in.status->value);
 
                 return NGX_HTTP_UPSTREAM_INVALID_HEADER;
+
+            } else if (u->headers_in.status_n < NGX_HTTP_OK) {
+
+                /* ignore unexpected 1xx responses */
+
+                ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                               "http scgi 1xx ignored");
+
+                u->process_header = ngx_http_scgi_process_status_line;
+
+                if (ngx_http_upstream_clear_headers(r, u) != NGX_OK) {
+                    return NGX_ERROR;
+                }
+
+                return ngx_http_scgi_process_status_line(r);
             }
 
             return NGX_OK;

@@ -2063,10 +2063,9 @@ ngx_http_fastcgi_process_header(ngx_http_request_t *r)
                     ngx_str_set(&u->headers_in.status_line, "200 OK");
                 }
 
-                if (u->headers_in.status_n < NGX_HTTP_OK) {
-
-                    /* reject 1xx responses */
-
+                if (u->headers_in.status_n == NGX_HTTP_SWITCHING_PROTOCOLS
+                    || u->headers_in.status_n < NGX_HTTP_CONTINUE)
+                {
                     ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                                   "upstream sent unexpected status \"%V\"",
                                   u->headers_in.status_line.len
@@ -2074,6 +2073,20 @@ ngx_http_fastcgi_process_header(ngx_http_request_t *r)
                                   : &u->headers_in.status->value);
 
                     return NGX_HTTP_UPSTREAM_INVALID_HEADER;
+
+                } else if (u->headers_in.status_n < NGX_HTTP_OK) {
+
+                    /* ignore unexpected 1xx responses */
+
+                    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                                   "http fastcgi 1xx ignored");
+
+                    if (ngx_http_upstream_clear_headers(r, u) != NGX_OK) {
+                        return NGX_ERROR;
+                    }
+
+                    rc = NGX_OK;
+                    break;
                 }
 
                 break;
