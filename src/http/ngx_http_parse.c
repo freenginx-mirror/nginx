@@ -1808,7 +1808,6 @@ ngx_http_parse_status_line(ngx_http_request_t *r, ngx_buf_t *b,
             switch (ch) {
             case CR:
                 state = sw_almost_done;
-
                 break;
             case LF:
                 goto done;
