@@ -1645,7 +1645,9 @@ ngx_http_parse_status_line(ngx_http_request_t *r, ngx_buf_t *b,
         sw_major_digit,
         sw_first_minor_digit,
         sw_minor_digit,
-        sw_status,
+        sw_first_status_digit,
+        sw_second_status_digit,
+        sw_third_status_digit,
         sw_space_after_status,
         sw_status_text,
         sw_almost_done
@@ -1750,7 +1752,7 @@ ngx_http_parse_status_line(ngx_http_request_t *r, ngx_buf_t *b,
         /* the minor HTTP version or the end of the request line */
         case sw_minor_digit:
             if (ch == ' ') {
-                state = sw_status;
+                state = sw_first_status_digit;
                 break;
             }
 
@@ -1765,8 +1767,8 @@ ngx_http_parse_status_line(ngx_http_request_t *r, ngx_buf_t *b,
             r->http_minor = r->http_minor * 10 + (ch - '0');
             break;
 
-        /* HTTP status code */
-        case sw_status:
+        /* the first digit of HTTP status code */
+        case sw_first_status_digit:
             if (ch == ' ') {
                 break;
             }
@@ -1775,13 +1777,29 @@ ngx_http_parse_status_line(ngx_http_request_t *r, ngx_buf_t *b,
                 return NGX_ERROR;
             }
 
-            status->code = status->code * 10 + (ch - '0');
+            status->code = ch - '0';
+            status->start = p;
+            state = sw_second_status_digit;
+            break;
 
-            if (++status->count == 3) {
-                state = sw_space_after_status;
-                status->start = p - 2;
+        /* the second digit of HTTP status code */
+        case sw_second_status_digit:
+            if (ch < '0' || ch > '9') {
+                return NGX_ERROR;
             }
 
+            status->code = status->code * 10 + (ch - '0');
+            state = sw_third_status_digit;
+            break;
+
+        /* the third digit of HTTP status code */
+        case sw_third_status_digit:
+            if (ch < '0' || ch > '9') {
+                return NGX_ERROR;
+            }
+
+            status->code = status->code * 10 + (ch - '0');
+            state = sw_space_after_status;
             break;
 
         /* space or end of line */
@@ -1797,6 +1815,7 @@ ngx_http_parse_status_line(ngx_http_request_t *r, ngx_buf_t *b,
                 state = sw_almost_done;
                 break;
             case LF:
+                status->end = p;
                 goto done;
             default:
                 return NGX_ERROR;
@@ -1810,6 +1829,7 @@ ngx_http_parse_status_line(ngx_http_request_t *r, ngx_buf_t *b,
                 state = sw_almost_done;
                 break;
             case LF:
+                status->end = p;
                 goto done;
             }
             break;
@@ -1834,10 +1854,6 @@ ngx_http_parse_status_line(ngx_http_request_t *r, ngx_buf_t *b,
 done:
 
     b->pos = p + 1;
-
-    if (status->end == NULL) {
-        status->end = p;
-    }
 
     status->http_version = r->http_major * 1000 + r->http_minor;
     r->state = sw_start;

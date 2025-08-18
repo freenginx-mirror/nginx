@@ -657,7 +657,7 @@ ngx_http_uwsgi_handler(ngx_http_request_t *r)
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
-    status = ngx_pcalloc(r->pool, sizeof(ngx_http_status_t));
+    status = ngx_palloc(r->pool, sizeof(ngx_http_status_t));
     if (status == NULL) {
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
@@ -1214,19 +1214,6 @@ ngx_http_uwsgi_create_request(ngx_http_request_t *r)
 static ngx_int_t
 ngx_http_uwsgi_reinit_request(ngx_http_request_t *r)
 {
-    ngx_http_status_t  *status;
-
-    status = ngx_http_get_module_ctx(r, ngx_http_uwsgi_module);
-
-    if (status == NULL) {
-        return NGX_OK;
-    }
-
-    status->code = 0;
-    status->count = 0;
-    status->start = NULL;
-    status->end = NULL;
-
     r->upstream->process_header = ngx_http_uwsgi_process_status_line;
     r->state = 0;
 

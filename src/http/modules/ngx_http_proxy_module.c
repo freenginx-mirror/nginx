@@ -1628,10 +1628,6 @@ ngx_http_proxy_reinit_request(ngx_http_request_t *r)
         return NGX_OK;
     }
 
-    ctx->status.code = 0;
-    ctx->status.count = 0;
-    ctx->status.start = NULL;
-    ctx->status.end = NULL;
     ctx->chunked.state = 0;
 
     r->upstream->process_header = ngx_http_proxy_process_status_line;
