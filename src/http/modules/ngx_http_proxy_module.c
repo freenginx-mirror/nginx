@@ -1958,13 +1958,15 @@ ngx_http_proxy_process_header(ngx_http_request_t *r)
             ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                            "http proxy header done");
 
+            u = r->upstream;
+
             /*
              * if no "Server" and "Date" in header line,
              * then add the special empty headers
              */
 
-            if (r->upstream->headers_in.server == NULL) {
-                h = ngx_list_push(&r->upstream->headers_in.headers);
+            if (u->headers_in.server == NULL) {
+                h = ngx_list_push(&u->headers_in.headers);
                 if (h == NULL) {
                     return NGX_ERROR;
                 }
@@ -1978,8 +1980,8 @@ ngx_http_proxy_process_header(ngx_http_request_t *r)
                 h->next = NULL;
             }
 
-            if (r->upstream->headers_in.date == NULL) {
-                h = ngx_list_push(&r->upstream->headers_in.headers);
+            if (u->headers_in.date == NULL) {
+                h = ngx_list_push(&u->headers_in.headers);
                 if (h == NULL) {
                     return NGX_ERROR;
                 }
@@ -1993,8 +1995,6 @@ ngx_http_proxy_process_header(ngx_http_request_t *r)
             }
 
             /* clear content length if response is chunked */
-
-            u = r->upstream;
 
             if (u->headers_in.chunked) {
                 u->headers_in.content_length_n = -1;
