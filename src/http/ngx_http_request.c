@@ -2155,9 +2155,11 @@ ngx_http_validate_host(ngx_str_t *host, ngx_pool_t *pool, ngx_uint_t alloc)
     size_t   i, dot_pos, host_len;
 
     enum {
-        sw_usual = 0,
+        sw_start = 0,
+        sw_host,
+        sw_host_end,
         sw_literal,
-        sw_rest
+        sw_port
     } state;
 
     dot_pos = host->len;
@@ -2165,55 +2167,126 @@ ngx_http_validate_host(ngx_str_t *host, ngx_pool_t *pool, ngx_uint_t alloc)
 
     h = host->data;
 
-    state = sw_usual;
+    state = sw_start;
 
     for (i = 0; i < host->len; i++) {
         ch = h[i];
 
-        switch (ch) {
+        switch (state) {
 
-        case '.':
-            if (dot_pos == i - 1) {
-                return NGX_DECLINED;
-            }
-            dot_pos = i;
-            break;
+        case sw_start:
 
-        case ':':
-            if (state == sw_usual) {
-                host_len = i;
-                state = sw_rest;
-            }
-            break;
-
-        case '[':
-            if (i == 0) {
+            if (ch == '[') {
+                host_len = 0;
                 state = sw_literal;
-            }
-            break;
-
-        case ']':
-            if (state == sw_literal) {
-                host_len = i + 1;
-                state = sw_rest;
-            }
-            break;
-
-        default:
-
-            if (ngx_path_separator(ch)) {
-                return NGX_DECLINED;
+                break;
             }
 
-            if (ch <= 0x20 || ch == 0x7f) {
-                return NGX_DECLINED;
+            state = sw_host;
+
+            /* fall through */
+
+        case sw_host:
+
+            if (ch >= 'a' && ch <= 'z') {
+                break;
             }
 
             if (ch >= 'A' && ch <= 'Z') {
                 alloc = 1;
+                break;
             }
 
-            break;
+            if (ch >= '0' && ch <= '9') {
+                break;
+            }
+
+            if (ch == '.') {
+                if (dot_pos == i - 1) {
+                    return NGX_DECLINED;
+                }
+                dot_pos = i;
+                break;
+            }
+
+            if (ch == '-' || ch == '_' || ch == '~'
+                || ch == '!' || ch == '$' || ch == '&' || ch == '\''
+                || ch == '(' || ch == ')' || ch == '*' || ch == '+'
+                || ch == ',' || ch == ';' || ch == '=' || ch == '%')
+            {
+                /* unreserved, sub-delims, pct-encoded */
+                break;
+            }
+
+            /* fall through */
+
+        case sw_host_end:
+
+            host_len = i;
+
+            if (ch == ':') {
+                state = sw_port;
+                break;
+            }
+
+            /* notably, "/" and "\" are rejected */
+
+            return NGX_DECLINED;
+
+        case sw_literal:
+
+            if (ch >= '0' && ch <= '9') {
+                break;
+            }
+
+            if (ch >= 'a' && ch <= 'z') {
+                break;
+            }
+
+            if (ch >= 'A' && ch <= 'Z') {
+                alloc = 1;
+                break;
+            }
+
+            if (ch == ':') {
+                break;
+            }
+
+            if (ch == '.') {
+                if (dot_pos == i - 1) {
+                    return NGX_DECLINED;
+                }
+                dot_pos = i;
+                break;
+            }
+
+            if (ch == '-' || ch == '_' || ch == '~'
+                || ch == '!' || ch == '$' || ch == '&' || ch == '\''
+                || ch == '(' || ch == ')' || ch == '*' || ch == '+'
+                || ch == ',' || ch == ';' || ch == '=' || ch == '%')
+            {
+                /* unreserved, sub-delims, pct-encoded */
+                break;
+            }
+
+            if (ch == ']') {
+                host_len = i + 1;
+                state = sw_host_end;
+                break;
+            }
+
+            /* notably, "/" and "\" are rejected */
+
+            return NGX_DECLINED;
+
+        case sw_port:
+
+            if (ch >= '0' && ch <= '9') {
+                break;
+            }
+
+            return NGX_DECLINED;
+
         }
     }
 
