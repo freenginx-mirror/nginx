@@ -392,7 +392,16 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
                 break;
             }
 
-            if ((ch >= '0' && ch <= '9') || ch == '.' || ch == '-') {
+            if (ch >= '0' && ch <= '9') {
+                break;
+            }
+
+            if (ch == '.' || ch == '-' || ch == '_' || ch == '~'
+                || ch == '!' || ch == '$' || ch == '&' || ch == '\''
+                || ch == '(' || ch == ')' || ch == '*' || ch == '+'
+                || ch == ',' || ch == ';' || ch == '=' || ch == '%')
+            {
+                /* unreserved, sub-delims, pct-encoded */
                 break;
             }
 
