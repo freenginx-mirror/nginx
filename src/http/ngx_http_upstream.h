@@ -182,6 +182,7 @@ typedef struct {
     ngx_flag_t                       intercept_errors;
     ngx_flag_t                       cyclic_temp_file;
     ngx_flag_t                       force_ranges;
+    ngx_flag_t                       duplicate_chunked;
 
     ngx_path_t                      *temp_path;
 

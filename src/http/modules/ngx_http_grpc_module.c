@@ -4431,6 +4431,7 @@ ngx_http_grpc_create_loc_conf(ngx_conf_t *cf)
     conf->upstream.pass_request_headers = 1;
     conf->upstream.pass_request_body = 1;
     conf->upstream.force_ranges = 0;
+    conf->upstream.duplicate_chunked = 0;
     conf->upstream.pass_trailers = 1;
     conf->upstream.preserve_output = 1;
 
