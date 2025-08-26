@@ -7,6 +7,99 @@
 <section title="freenginx">
 
 
+<changes ver="1.29.1" date="2025-08-26">
+
+<change type="change">
+<para lang="ru">
+теперь ответы проксируемых серверов по HTTP/0.9
+по умолчанию отвергаются как ошибочные;
+директива proxy_allow_http09 разрешает их обработку.
+</para>
+<para lang="en">
+now responses from proxied servers over HTTP/0.9
+are rejected as invalid by default;
+the "proxy_allow_http09" directive allows processing of such responses.
+</para>
+</change>
+
+<change type="change">
+<para lang="ru">
+к строке "Host" заголовка запроса
+теперь применяются более строгие проверки синтаксиса.
+</para>
+<para lang="en">
+stricter syntax checks are now applied
+to the "Host" request header line.
+</para>
+</change>
+
+<change type="feature">
+<para lang="ru">
+теперь промежуточные 1xx ответы проксируемых серверов игнорируются.
+</para>
+<para lang="en">
+now interim 1xx responses of proxied servers are ignored.
+</para>
+</change>
+
+<change type="feature">
+<para lang="ru">
+при проверке SSL-сертификатов бэкендов
+теперь поддерживаются сертификаты на IP-адреса.
+</para>
+<para lang="en">
+certificates for IP addresses are now supported
+when verifying backend SSL certificates.
+</para>
+</change>
+
+<change type="feature">
+<para lang="ru">
+директива proxy_allow_duplicate_chunked.<br/>
+Спасибо Геннадию Бекасову.
+</para>
+<para lang="en">
+the "proxy_allow_duplicate_chunked" directive.<br/>
+Thanks to Gennady Bekasov.
+</para>
+</change>
+
+<change type="bugfix">
+<para lang="ru">
+при использовании имени хоста в строке запроса
+символ "_" и некоторые другие считались недопустимыми,
+а в IPv6-адресах не допускалось использование идентификаторов зон.
+</para>
+<para lang="en">
+when using a host name in the request line,
+the "_" and some other characters were not allowed,
+as well as zone identifiers in IPv6 addresses.
+</para>
+</change>
+
+<change type="workaround">
+<para lang="ru">
+на NetBSD в логах могли появляться
+сообщения "shutdown() failed (22: Invalid argument)".
+</para>
+<para lang="en">
+"shutdown() failed (22: Invalid argument)" alerts
+might appear in logs on NetBSD.
+</para>
+</change>
+
+<change type="bugfix">
+<para lang="ru">
+в почтовом прокси-сервере.
+</para>
+<para lang="en">
+in the mail proxy module.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.29.0" date="2025-07-08">
 
 <change type="change">
