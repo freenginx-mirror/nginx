@@ -662,6 +662,117 @@ ngx_ssl_load_certificate(ngx_pool_t *pool, char **err, ngx_str_t *cert,
     X509    *x509, *temp;
     u_long   n;
 
+    if (ngx_strncmp(cert->data, "store:", sizeof("store:") - 1) == 0) {
+
+#ifdef OSSL_STORE_INFO_CERT
+
+        u_char           *p;
+        OSSL_STORE_CTX   *store;
+        OSSL_STORE_INFO  *info;
+
+        p = cert->data + sizeof("store:") - 1;
+
+        store = OSSL_STORE_open((char *) p, UI_null(), NULL, NULL, NULL);
+        if (store == NULL) {
+            *err = "OSSL_STORE_open() failed";
+            return NULL;
+        }
+
+        if (OSSL_STORE_expect(store, OSSL_STORE_INFO_CERT) != 1) {
+            *err = "OSSL_STORE_expect() failed";
+            OSSL_STORE_close(store);
+            return NULL;
+        }
+
+        /* certificate itself */
+
+        for ( ;; ) {
+            info = OSSL_STORE_load(store);
+            if (info == NULL) {
+
+                /*
+                 * OSSL_STORE_load() may return an error, for example,
+                 * if it encounters an encrypted key, even when expected
+                 * object type is explicitly set with with OSSL_STORE_expect().
+                 * We ignore such errors as long as there are additional
+                 * objects to load, and report accumulated errors from
+                 * the error queue if nothing was loaded.
+                 */
+
+                if (!OSSL_STORE_eof(store)) {
+                    continue;
+                }
+
+                *err = "OSSL_STORE_load() failed";
+                OSSL_STORE_close(store);
+                return NULL;
+            }
+
+            ERR_clear_error();
+
+            x509 = OSSL_STORE_INFO_get1_CERT(info);
+
+            OSSL_STORE_INFO_free(info);
+            break;
+        }
+
+        /* rest of the chain */
+
+        *chain = sk_X509_new_null();
+        if (*chain == NULL) {
+            *err = "sk_X509_new_null() failed";
+            OSSL_STORE_close(store);
+            X509_free(x509);
+            return NULL;
+        }
+
+        for ( ;; ) {
+            info = OSSL_STORE_load(store);
+            if (info == NULL) {
+
+                /* ignore errors */
+
+                if (!OSSL_STORE_eof(store)) {
+                    ERR_clear_error();
+                    continue;
+                }
+
+                break;
+            }
+
+            temp = OSSL_STORE_INFO_get1_CERT(info);
+            if (temp == NULL) {
+                *err = "OSSL_STORE_INFO_get1_CERT() failed";
+                OSSL_STORE_INFO_free(info);
+                OSSL_STORE_close(store);
+                X509_free(x509);
+                sk_X509_pop_free(*chain, X509_free);
+                return NULL;
+            }
+
+            if (sk_X509_push(*chain, temp) == 0) {
+                *err = "sk_X509_push() failed";
+                OSSL_STORE_INFO_free(info);
+                OSSL_STORE_close(store);
+                X509_free(x509);
+                sk_X509_pop_free(*chain, X509_free);
+                return NULL;
+            }
+
+            OSSL_STORE_INFO_free(info);
+        }
+
+        OSSL_STORE_close(store);
+        return x509;
+
+#else
+
+        *err = "loading \"store:...\" certificates is not supported";
+        return NULL;
+
+#endif
+    }
+
     if (ngx_strncmp(cert->data, "data:", sizeof("data:") - 1) == 0) {
 
         bio = BIO_new_mem_buf(cert->data + sizeof("data:") - 1,
@@ -795,6 +906,107 @@ ngx_ssl_load_certificate_key(ngx_pool_t *pool, char **err,
 #else
 
         *err = "loading \"engine:...\" certificate keys is not supported";
+        return NULL;
+
+#endif
+    }
+
+    if (ngx_strncmp(key->data, "store:", sizeof("store:") - 1) == 0) {
+
+#ifdef OSSL_STORE_INFO_PKEY
+
+        u_char           *p;
+        OSSL_STORE_CTX   *store;
+        OSSL_STORE_INFO  *info;
+        UI_METHOD        *wrap;
+        const UI_METHOD  *ui;
+
+        p = key->data + sizeof("store:") - 1;
+
+        if (passwords) {
+            wrap = UI_UTIL_wrap_read_pem_callback(ngx_ssl_password_callback, 0);
+            if (wrap == NULL) {
+                *err = "UI_UTIL_wrap_read_pem_callback() failed";
+                return NULL;
+            }
+
+            ui = wrap;
+            tries = passwords->nelts;
+            pwd = passwords->elts;
+
+        } else {
+            wrap = NULL;
+            ui = UI_get_default_method();
+            tries = 1;
+            pwd = NULL;
+        }
+
+        for ( ;; ) {
+
+            store = OSSL_STORE_open((char *) p, ui, pwd, NULL, NULL);
+            if (store == NULL) {
+                *err = "OSSL_STORE_open() failed";
+                if (wrap) {
+                    UI_destroy_method(wrap);
+                }
+                return NULL;
+            }
+
+            if (OSSL_STORE_expect(store, OSSL_STORE_INFO_PKEY) != 1) {
+                *err = "OSSL_STORE_expect() failed";
+                OSSL_STORE_close(store);
+                if (wrap) {
+                    UI_destroy_method(wrap);
+                }
+                return NULL;
+            }
+
+            info = OSSL_STORE_load(store);
+            if (info == NULL) {
+
+                /* retry if multiple passwords available */
+
+                if (tries-- > 1) {
+                    OSSL_STORE_close(store);
+                    ERR_clear_error();
+                    pwd++;
+                    continue;
+                }
+
+                *err = "OSSL_STORE_load() failed";
+                OSSL_STORE_close(store);
+                if (wrap) {
+                    UI_destroy_method(wrap);
+                }
+                return NULL;
+            }
+
+            pkey = OSSL_STORE_INFO_get1_PKEY(info);
+            if (pkey == NULL) {
+                *err = "OSSL_STORE_INFO_get1_PKEY() failed";
+                OSSL_STORE_INFO_free(info);
+                OSSL_STORE_close(store);
+                if (wrap) {
+                    UI_destroy_method(wrap);
+                }
+                return NULL;
+            }
+
+            OSSL_STORE_INFO_free(info);
+            break;
+        }
+
+        OSSL_STORE_close(store);
+
+        if (wrap) {
+            UI_destroy_method(wrap);
+        }
+
+        return pkey;
+
+#else
+
+        *err = "loading \"store:...\" certificate keys is not supported";
         return NULL;
 
 #endif

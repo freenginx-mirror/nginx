@@ -42,6 +42,10 @@
 #ifdef SSL_R_UNSUPPORTED_ECH_SERVER_CONFIG
 #include <openssl/hpke.h>
 #endif
+#ifdef ERR_R_OSSL_STORE_LIB
+#include <openssl/ui.h>
+#include <openssl/store.h>
+#endif
 
 #define NGX_SSL_NAME     "OpenSSL"
 
