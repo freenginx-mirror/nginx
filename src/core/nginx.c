@@ -1281,6 +1281,13 @@ ngx_core_module_init_conf(ngx_cycle_t *cycle, void *conf)
 
 #endif
 
+
+    if (ccf->working_directory.len) {
+        if (ngx_conf_full_name(cycle, &ccf->working_directory, 0) != NGX_OK) {
+            return NGX_CONF_ERROR;
+        }
+    }
+
     return NGX_CONF_OK;
 }
 
