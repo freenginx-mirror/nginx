@@ -834,6 +834,10 @@ ngx_http_xslt_entities(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     value = cf->args->elts;
 
+    if (ngx_conf_full_name(cf->cycle, &value[1], 0) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+
     xmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_xslt_filter_module);
 
     file = xmcf->dtd_files.elts;
