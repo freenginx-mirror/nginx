@@ -1259,7 +1259,7 @@ ngx_http_geo_value(ngx_conf_t *cf, ngx_http_geo_conf_ctx_t *ctx,
         return gvvn->value;
     }
 
-    val = ngx_palloc(ctx->pool, sizeof(ngx_http_variable_value_t));
+    val = ngx_pcalloc(ctx->pool, sizeof(ngx_http_variable_value_t));
     if (val == NULL) {
         return NULL;
     }

@@ -1209,7 +1209,7 @@ ngx_stream_geo_value(ngx_conf_t *cf, ngx_stream_geo_conf_ctx_t *ctx,
         return gvvn->value;
     }
 
-    val = ngx_palloc(ctx->pool, sizeof(ngx_stream_variable_value_t));
+    val = ngx_pcalloc(ctx->pool, sizeof(ngx_stream_variable_value_t));
     if (val == NULL) {
         return NULL;
     }
