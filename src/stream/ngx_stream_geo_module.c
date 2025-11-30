@@ -1390,6 +1390,7 @@ ngx_stream_geo_include_binary_base(ngx_conf_t *cf,
     if (ngx_file_info(name->data, &fi) == NGX_FILE_ERROR) {
         ngx_conf_log_error(NGX_LOG_CRIT, cf, ngx_errno,
                            ngx_file_info_n " \"%s\" failed", name->data);
+        name->data[name->len - 4] = ch;
         goto failed;
     }
 
