@@ -72,6 +72,13 @@ static ngx_int_t ngx_stream_geoip_city_int_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data);
 static GeoIPRecord *ngx_stream_geoip_get_city_record(ngx_stream_session_t *s);
 
+static u_long ngx_stream_geoip_addr(ngx_stream_session_t *s,
+    ngx_stream_geoip_conf_t *gcf);
+#if (NGX_HAVE_GEOIP_V6)
+static geoipv6_t ngx_stream_geoip_addr_v6(ngx_stream_session_t *s,
+    ngx_stream_geoip_conf_t *gcf);
+#endif
+
 static ngx_int_t ngx_stream_geoip_add_variables(ngx_conf_t *cf);
 static void *ngx_stream_geoip_create_conf(ngx_conf_t *cf);
 static char *ngx_stream_geoip_country(ngx_conf_t *cf, ngx_command_t *cmd,
@@ -206,91 +213,6 @@ static ngx_stream_variable_t  ngx_stream_geoip_vars[] = {
 
       ngx_stream_null_variable
 };
-
-
-static u_long
-ngx_stream_geoip_addr(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
-{
-    ngx_addr_t           addr;
-    struct sockaddr_in  *sin;
-
-    addr.sockaddr = s->connection->sockaddr;
-    addr.socklen = s->connection->socklen;
-    /* addr.name = s->connection->addr_text; */
-
-#if (NGX_HAVE_INET6)
-
-    if (addr.sockaddr->sa_family == AF_INET6) {
-        u_char           *p;
-        in_addr_t         inaddr;
-        struct in6_addr  *inaddr6;
-
-        inaddr6 = &((struct sockaddr_in6 *) addr.sockaddr)->sin6_addr;
-
-        if (IN6_IS_ADDR_V4MAPPED(inaddr6)) {
-            p = inaddr6->s6_addr;
-
-            inaddr = (in_addr_t) p[12] << 24;
-            inaddr += p[13] << 16;
-            inaddr += p[14] << 8;
-            inaddr += p[15];
-
-            return inaddr;
-        }
-    }
-
-#endif
-
-    if (addr.sockaddr->sa_family != AF_INET) {
-        return INADDR_NONE;
-    }
-
-    sin = (struct sockaddr_in *) addr.sockaddr;
-    return ntohl(sin->sin_addr.s_addr);
-}
-
-
-#if (NGX_HAVE_GEOIP_V6)
-
-static geoipv6_t
-ngx_stream_geoip_addr_v6(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
-{
-    ngx_addr_t            addr;
-    in_addr_t             addr4;
-    struct in6_addr       addr6;
-    struct sockaddr_in   *sin;
-    struct sockaddr_in6  *sin6;
-
-    addr.sockaddr = s->connection->sockaddr;
-    addr.socklen = s->connection->socklen;
-    /* addr.name = s->connection->addr_text; */
-
-    switch (addr.sockaddr->sa_family) {
-
-    case AF_INET:
-        /* Produce IPv4-mapped IPv6 address. */
-        sin = (struct sockaddr_in *) addr.sockaddr;
-        addr4 = ntohl(sin->sin_addr.s_addr);
-
-        ngx_memzero(&addr6, sizeof(struct in6_addr));
-        addr6.s6_addr[10] = 0xff;
-        addr6.s6_addr[11] = 0xff;
-        addr6.s6_addr[12] = addr4 >> 24;
-        addr6.s6_addr[13] = addr4 >> 16;
-        addr6.s6_addr[14] = addr4 >> 8;
-        addr6.s6_addr[15] = addr4;
-        return addr6;
-
-    case AF_INET6:
-        sin6 = (struct sockaddr_in6 *) addr.sockaddr;
-        return sin6->sin6_addr;
-
-    default:
-        return in6addr_any;
-    }
-}
-
-#endif
 
 
 static ngx_int_t
@@ -572,6 +494,91 @@ ngx_stream_geoip_get_city_record(ngx_stream_session_t *s)
 
     return NULL;
 }
+
+
+static u_long
+ngx_stream_geoip_addr(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
+{
+    ngx_addr_t           addr;
+    struct sockaddr_in  *sin;
+
+    addr.sockaddr = s->connection->sockaddr;
+    addr.socklen = s->connection->socklen;
+    /* addr.name = s->connection->addr_text; */
+
+#if (NGX_HAVE_INET6)
+
+    if (addr.sockaddr->sa_family == AF_INET6) {
+        u_char           *p;
+        in_addr_t         inaddr;
+        struct in6_addr  *inaddr6;
+
+        inaddr6 = &((struct sockaddr_in6 *) addr.sockaddr)->sin6_addr;
+
+        if (IN6_IS_ADDR_V4MAPPED(inaddr6)) {
+            p = inaddr6->s6_addr;
+
+            inaddr = (in_addr_t) p[12] << 24;
+            inaddr += p[13] << 16;
+            inaddr += p[14] << 8;
+            inaddr += p[15];
+
+            return inaddr;
+        }
+    }
+
+#endif
+
+    if (addr.sockaddr->sa_family != AF_INET) {
+        return INADDR_NONE;
+    }
+
+    sin = (struct sockaddr_in *) addr.sockaddr;
+    return ntohl(sin->sin_addr.s_addr);
+}
+
+
+#if (NGX_HAVE_GEOIP_V6)
+
+static geoipv6_t
+ngx_stream_geoip_addr_v6(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
+{
+    ngx_addr_t            addr;
+    in_addr_t             addr4;
+    struct in6_addr       addr6;
+    struct sockaddr_in   *sin;
+    struct sockaddr_in6  *sin6;
+
+    addr.sockaddr = s->connection->sockaddr;
+    addr.socklen = s->connection->socklen;
+    /* addr.name = s->connection->addr_text; */
+
+    switch (addr.sockaddr->sa_family) {
+
+    case AF_INET:
+        /* Produce IPv4-mapped IPv6 address. */
+        sin = (struct sockaddr_in *) addr.sockaddr;
+        addr4 = ntohl(sin->sin_addr.s_addr);
+
+        ngx_memzero(&addr6, sizeof(struct in6_addr));
+        addr6.s6_addr[10] = 0xff;
+        addr6.s6_addr[11] = 0xff;
+        addr6.s6_addr[12] = addr4 >> 24;
+        addr6.s6_addr[13] = addr4 >> 16;
+        addr6.s6_addr[14] = addr4 >> 8;
+        addr6.s6_addr[15] = addr4;
+        return addr6;
+
+    case AF_INET6:
+        sin6 = (struct sockaddr_in6 *) addr.sockaddr;
+        return sin6->sin6_addr;
+
+    default:
+        return in6addr_any;
+    }
+}
+
+#endif
 
 
 static ngx_int_t
