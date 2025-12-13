@@ -1,6 +1,7 @@
 
 /*
  * Copyright (C) Igor Sysoev
+ * Copyright (C) Maxim Dounin
  * Copyright (C) Nginx, Inc.
  */
 
@@ -9,25 +10,56 @@
 #include <ngx_core.h>
 #include <ngx_stream.h>
 
+#if (NGX_HAVE_GEOIP_LEGACY)
+
 #include <GeoIP.h>
 #include <GeoIPCity.h>
 
+#endif
 
-#define NGX_GEOIP_COUNTRY_CODE   0
-#define NGX_GEOIP_COUNTRY_CODE3  1
-#define NGX_GEOIP_COUNTRY_NAME   2
+#if (NGX_HAVE_GEOIP_MMDB)
+
+#include <maxminddb.h>
+
+#endif
+
+
+#define NGX_GEOIP_COUNTRY_CODE    0
+#define NGX_GEOIP_COUNTRY_CODE3   1
+#define NGX_GEOIP_COUNTRY_NAME    2
+#define NGX_GEOIP_CONTINENT_CODE  3
+#define NGX_GEOIP_REGION          4
+#define NGX_GEOIP_REGION_NAME     5
+#define NGX_GEOIP_CITY            6
+#define NGX_GEOIP_POSTAL_CODE     7
+#define NGX_GEOIP_LATITUDE        8
+#define NGX_GEOIP_LONGITUDE       9
+#define NGX_GEOIP_DMA_CODE        10
+#define NGX_GEOIP_AREA_CODE       11
 
 
 typedef struct {
-    GeoIP        *country;
-    GeoIP        *org;
-    GeoIP        *city;
-#if (NGX_HAVE_GEOIP_V6)
+    void         *country;
+    void         *org;
+    void         *city;
+    ngx_array_t  *mmdb;       /* array of MMDB_s */
     unsigned      country_v6:1;
+    unsigned      country_mmdb:1;
     unsigned      org_v6:1;
+    unsigned      org_mmdb:1;
     unsigned      city_v6:1;
-#endif
+    unsigned      city_mmdb:1;
 } ngx_stream_geoip_conf_t;
+
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+typedef struct {
+    MMDB_s       *mmdb;
+    const char  **path;
+} ngx_stream_geoip_variable_t;
+
+#endif
 
 
 static ngx_int_t ngx_stream_geoip_country_variable(ngx_stream_session_t *s,
@@ -42,13 +74,24 @@ static ngx_int_t ngx_stream_geoip_city_float_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data);
 static ngx_int_t ngx_stream_geoip_city_int_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data);
+#if (NGX_HAVE_GEOIP_LEGACY)
 static GeoIPRecord *ngx_stream_geoip_get_city_record(ngx_stream_session_t *s);
+#endif
 
+#if (NGX_HAVE_GEOIP_MMDB)
+static ngx_int_t ngx_stream_geoip_mmdb_city_variable(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data);
+static ngx_int_t ngx_stream_geoip_mmdb_variable(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data);
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
 static u_long ngx_stream_geoip_addr(ngx_stream_session_t *s,
     ngx_stream_geoip_conf_t *gcf);
 #if (NGX_HAVE_GEOIP_V6)
 static geoipv6_t ngx_stream_geoip_addr_v6(ngx_stream_session_t *s,
     ngx_stream_geoip_conf_t *gcf);
+#endif
 #endif
 
 static ngx_int_t ngx_stream_geoip_add_variables(ngx_conf_t *cf);
@@ -59,6 +102,15 @@ static char *ngx_stream_geoip_org(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 static char *ngx_stream_geoip_city(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
+static char *ngx_stream_geoip_set(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf);
+#if (NGX_HAVE_GEOIP_MMDB)
+static MMDB_s *ngx_stream_geoip_mmdb_open(ngx_conf_t *cf,
+    ngx_stream_geoip_conf_t *gcf, ngx_str_t *file);
+#endif
+#if (NGX_HAVE_GEOIP_LEGACY)
+static ngx_int_t ngx_stream_geoip_mmdb_file(ngx_str_t *file);
+#endif
 static void ngx_stream_geoip_cleanup(void *data);
 
 
@@ -81,6 +133,13 @@ static ngx_command_t  ngx_stream_geoip_commands[] = {
     { ngx_string("geoip_city"),
       NGX_STREAM_MAIN_CONF|NGX_CONF_TAKE12,
       ngx_stream_geoip_city,
+      NGX_STREAM_MAIN_CONF_OFFSET,
+      0,
+      NULL },
+
+    { ngx_string("geoip_set"),
+      NGX_STREAM_MAIN_CONF|NGX_CONF_TAKE3,
+      ngx_stream_geoip_set,
       NGX_STREAM_MAIN_CONF_OFFSET,
       0,
       NULL },
@@ -137,61 +196,103 @@ static ngx_stream_variable_t  ngx_stream_geoip_vars[] = {
 
     { ngx_string("geoip_city_continent_code"), NULL,
       ngx_stream_geoip_city_variable,
-      offsetof(GeoIPRecord, continent_code), 0, 0 },
+      NGX_GEOIP_CONTINENT_CODE, 0, 0 },
 
     { ngx_string("geoip_city_country_code"), NULL,
       ngx_stream_geoip_city_variable,
-      offsetof(GeoIPRecord, country_code), 0, 0 },
+      NGX_GEOIP_COUNTRY_CODE, 0, 0 },
 
     { ngx_string("geoip_city_country_code3"), NULL,
       ngx_stream_geoip_city_variable,
-      offsetof(GeoIPRecord, country_code3), 0, 0 },
+      NGX_GEOIP_COUNTRY_CODE3, 0, 0 },
 
     { ngx_string("geoip_city_country_name"), NULL,
       ngx_stream_geoip_city_variable,
-      offsetof(GeoIPRecord, country_name), 0, 0 },
+      NGX_GEOIP_COUNTRY_NAME, 0, 0 },
 
     { ngx_string("geoip_region"), NULL,
       ngx_stream_geoip_city_variable,
-      offsetof(GeoIPRecord, region), 0, 0 },
+      NGX_GEOIP_REGION, 0, 0 },
 
     { ngx_string("geoip_region_name"), NULL,
       ngx_stream_geoip_region_name_variable,
-      0, 0, 0 },
+      NGX_GEOIP_REGION_NAME, 0, 0 },
 
     { ngx_string("geoip_city"), NULL,
       ngx_stream_geoip_city_variable,
-      offsetof(GeoIPRecord, city), 0, 0 },
+      NGX_GEOIP_CITY, 0, 0 },
 
     { ngx_string("geoip_postal_code"), NULL,
       ngx_stream_geoip_city_variable,
-      offsetof(GeoIPRecord, postal_code), 0, 0 },
+      NGX_GEOIP_POSTAL_CODE, 0, 0 },
 
     { ngx_string("geoip_latitude"), NULL,
       ngx_stream_geoip_city_float_variable,
-      offsetof(GeoIPRecord, latitude), 0, 0 },
+      NGX_GEOIP_LATITUDE, 0, 0 },
 
     { ngx_string("geoip_longitude"), NULL,
       ngx_stream_geoip_city_float_variable,
-      offsetof(GeoIPRecord, longitude), 0, 0 },
+      NGX_GEOIP_LONGITUDE, 0, 0 },
 
     { ngx_string("geoip_dma_code"), NULL,
       ngx_stream_geoip_city_int_variable,
-      offsetof(GeoIPRecord, dma_code), 0, 0 },
+      NGX_GEOIP_DMA_CODE, 0, 0 },
 
     { ngx_string("geoip_area_code"), NULL,
       ngx_stream_geoip_city_int_variable,
-      offsetof(GeoIPRecord, area_code), 0, 0 },
+      NGX_GEOIP_AREA_CODE, 0, 0 },
 
       ngx_stream_null_variable
 };
+
+
+#if (NGX_HAVE_GEOIP_LEGACY)
+
+static uintptr_t  ngx_stream_geoip_city_offsets[] = {
+    offsetof(GeoIPRecord, country_code),
+    offsetof(GeoIPRecord, country_code3),
+    offsetof(GeoIPRecord, country_name),
+    offsetof(GeoIPRecord, continent_code),
+    offsetof(GeoIPRecord, region),
+    0,                                                /* region name */
+    offsetof(GeoIPRecord, city),
+    offsetof(GeoIPRecord, postal_code),
+    offsetof(GeoIPRecord, latitude),
+    offsetof(GeoIPRecord, longitude),
+    offsetof(GeoIPRecord, dma_code),
+    offsetof(GeoIPRecord, area_code)
+};
+
+#endif
+
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+static const char  *ngx_stream_geoip_mmdb_paths[][5] = {
+    { "country", "iso_code", NULL, NULL, NULL },
+    { NULL, NULL, NULL, NULL, NULL },                 /* country code3 */
+    { "country", "names", "en", NULL, NULL },
+    { "continent", "code", NULL, NULL, NULL },
+    { "subdivisions", "0", "iso_code", NULL, NULL },
+    { "subdivisions", "0", "names", "en", NULL },
+    { "city", "names", "en", NULL, NULL },
+    { "postal", "code", NULL, NULL, NULL },
+    { "location", "latitude", NULL, NULL, NULL },
+    { "location", "longitude", NULL, NULL, NULL },
+    { "location", "metro_code", NULL, NULL, NULL },
+    { NULL, NULL, NULL, NULL, NULL }                  /* area code */
+};
+
+#endif
 
 
 static ngx_int_t
 ngx_stream_geoip_country_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data)
 {
+#if (NGX_HAVE_GEOIP_LEGACY)
     const char               *val;
+#endif
     ngx_stream_geoip_conf_t  *gcf;
 
     gcf = ngx_stream_get_module_main_conf(s, ngx_stream_geoip_module);
@@ -199,6 +300,21 @@ ngx_stream_geoip_country_variable(ngx_stream_session_t *s,
     if (gcf->country == NULL) {
         goto not_found;
     }
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+    if (gcf->country_mmdb) {
+        ngx_stream_geoip_variable_t  gv;
+
+        gv.mmdb = gcf->country;
+        gv.path = ngx_stream_geoip_mmdb_paths[data];
+
+        return ngx_stream_geoip_mmdb_variable(s, v, (uintptr_t) &gv);
+    }
+
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
 
 #if (NGX_HAVE_GEOIP_V6)
     if (gcf->country_v6) {
@@ -243,6 +359,8 @@ ngx_stream_geoip_country_variable(ngx_stream_session_t *s,
 
     return NGX_OK;
 
+#endif
+
 not_found:
 
     v->not_found = 1;
@@ -255,8 +373,10 @@ static ngx_int_t
 ngx_stream_geoip_org_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data)
 {
+#if (NGX_HAVE_GEOIP_LEGACY)
     size_t                    len;
     char                     *val;
+#endif
     ngx_stream_geoip_conf_t  *gcf;
 
     gcf = ngx_stream_get_module_main_conf(s, ngx_stream_geoip_module);
@@ -264,6 +384,32 @@ ngx_stream_geoip_org_variable(ngx_stream_session_t *s,
     if (gcf->org == NULL) {
         goto not_found;
     }
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+    if (gcf->org_mmdb) {
+        ngx_int_t                    rc;
+        ngx_stream_geoip_variable_t  gv;
+
+        static const char *org[] = { "organization", NULL };
+        static const char *asorg[] = { "autonomous_system_organization", NULL };
+
+        gv.mmdb = gcf->org;
+        gv.path = org;
+
+        rc = ngx_stream_geoip_mmdb_variable(s, v, (uintptr_t) &gv);
+
+        if (rc == NGX_OK && v->not_found) {
+            gv.path = asorg;
+            rc = ngx_stream_geoip_mmdb_variable(s, v, (uintptr_t) &gv);
+        }
+
+        return rc;
+    }
+
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
 
 #if (NGX_HAVE_GEOIP_V6)
     if (gcf->org_v6) {
@@ -298,6 +444,8 @@ ngx_stream_geoip_org_variable(ngx_stream_session_t *s,
 
     return NGX_OK;
 
+#endif
+
 not_found:
 
     v->not_found = 1;
@@ -310,16 +458,32 @@ static ngx_int_t
 ngx_stream_geoip_city_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data)
 {
+#if (NGX_HAVE_GEOIP_LEGACY)
     char         *val;
     size_t        len;
     GeoIPRecord  *gr;
+#endif
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+    ngx_int_t  rc;
+
+    rc = ngx_stream_geoip_mmdb_city_variable(s, v, data);
+
+    if (rc != NGX_DECLINED) {
+        return rc;
+    }
+
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
 
     gr = ngx_stream_geoip_get_city_record(s);
     if (gr == NULL) {
         goto not_found;
     }
 
-    val = *(char **) ((char *) gr + data);
+    val = *(char **) ((char *) gr + ngx_stream_geoip_city_offsets[data]);
     if (val == NULL) {
         goto no_value;
     }
@@ -348,6 +512,8 @@ no_value:
 
 not_found:
 
+#endif
+
     v->not_found = 1;
 
     return NGX_OK;
@@ -358,9 +524,25 @@ static ngx_int_t
 ngx_stream_geoip_region_name_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data)
 {
+#if (NGX_HAVE_GEOIP_LEGACY)
     size_t        len;
     const char   *val;
     GeoIPRecord  *gr;
+#endif
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+    ngx_int_t  rc;
+
+    rc = ngx_stream_geoip_mmdb_city_variable(s, v, data);
+
+    if (rc != NGX_DECLINED) {
+        return rc;
+    }
+
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
 
     gr = ngx_stream_geoip_get_city_record(s);
     if (gr == NULL) {
@@ -392,6 +574,8 @@ ngx_stream_geoip_region_name_variable(ngx_stream_session_t *s,
 
 not_found:
 
+#endif
+
     v->not_found = 1;
 
     return NGX_OK;
@@ -402,13 +586,28 @@ static ngx_int_t
 ngx_stream_geoip_city_float_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data)
 {
+#if (NGX_HAVE_GEOIP_LEGACY)
     float         val;
     GeoIPRecord  *gr;
+#endif
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+    ngx_int_t  rc;
+
+    rc = ngx_stream_geoip_mmdb_city_variable(s, v, data);
+
+    if (rc != NGX_DECLINED) {
+        return rc;
+    }
+
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
 
     gr = ngx_stream_geoip_get_city_record(s);
     if (gr == NULL) {
-        v->not_found = 1;
-        return NGX_OK;
+        goto not_found;
     }
 
     v->data = ngx_pnalloc(s->connection->pool, NGX_INT64_LEN + 5);
@@ -417,7 +616,7 @@ ngx_stream_geoip_city_float_variable(ngx_stream_session_t *s,
         return NGX_ERROR;
     }
 
-    val = *(float *) ((char *) gr + data);
+    val = *(float *) ((char *) gr + ngx_stream_geoip_city_offsets[data]);
 
     v->len = ngx_sprintf(v->data, "%.4f", val) - v->data;
     v->valid = 1;
@@ -427,6 +626,14 @@ ngx_stream_geoip_city_float_variable(ngx_stream_session_t *s,
     GeoIPRecord_delete(gr);
 
     return NGX_OK;
+
+not_found:
+
+#endif
+
+    v->not_found = 1;
+
+    return NGX_OK;
 }
 
 
@@ -434,13 +641,28 @@ static ngx_int_t
 ngx_stream_geoip_city_int_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data)
 {
+#if (NGX_HAVE_GEOIP_LEGACY)
     int           val;
     GeoIPRecord  *gr;
+#endif
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+    ngx_int_t  rc;
+
+    rc = ngx_stream_geoip_mmdb_city_variable(s, v, data);
+
+    if (rc != NGX_DECLINED) {
+        return rc;
+    }
+
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
 
     gr = ngx_stream_geoip_get_city_record(s);
     if (gr == NULL) {
-        v->not_found = 1;
-        return NGX_OK;
+        goto not_found;
     }
 
     v->data = ngx_pnalloc(s->connection->pool, NGX_INT64_LEN);
@@ -449,7 +671,7 @@ ngx_stream_geoip_city_int_variable(ngx_stream_session_t *s,
         return NGX_ERROR;
     }
 
-    val = *(int *) ((char *) gr + data);
+    val = *(int *) ((char *) gr + ngx_stream_geoip_city_offsets[data]);
 
     v->len = ngx_sprintf(v->data, "%d", val) - v->data;
     v->valid = 1;
@@ -459,8 +681,18 @@ ngx_stream_geoip_city_int_variable(ngx_stream_session_t *s,
     GeoIPRecord_delete(gr);
 
     return NGX_OK;
+
+not_found:
+
+#endif
+
+    v->not_found = 1;
+
+    return NGX_OK;
 }
 
+
+#if (NGX_HAVE_GEOIP_LEGACY)
 
 static GeoIPRecord *
 ngx_stream_geoip_get_city_record(ngx_stream_session_t *s)
@@ -482,6 +714,169 @@ ngx_stream_geoip_get_city_record(ngx_stream_session_t *s)
     return NULL;
 }
 
+#endif
+
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+static ngx_int_t
+ngx_stream_geoip_mmdb_city_variable(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data)
+{
+    ngx_stream_geoip_conf_t      *gcf;
+    ngx_stream_geoip_variable_t   gv;
+
+    gcf = ngx_stream_get_module_main_conf(s, ngx_stream_geoip_module);
+
+    if (!gcf->city_mmdb) {
+        return NGX_DECLINED;
+    }
+
+    gv.mmdb = gcf->city;
+    gv.path = ngx_stream_geoip_mmdb_paths[data];
+
+    return ngx_stream_geoip_mmdb_variable(s, v, (uintptr_t) &gv);
+}
+
+
+static ngx_int_t
+ngx_stream_geoip_mmdb_variable(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data)
+{
+    ngx_stream_geoip_variable_t *gv = (ngx_stream_geoip_variable_t *) data;
+
+    int                    status;
+    struct sockaddr       *sockaddr;
+    MMDB_entry_data_s      entry;
+    MMDB_lookup_result_s   result;
+
+    if (gv->path[0] == NULL) {
+        goto not_found;
+    }
+
+    sockaddr = s->connection->sockaddr;
+
+    if (sockaddr->sa_family != AF_INET
+#if (NGX_HAVE_INET6)
+        && sockaddr->sa_family != AF_INET6
+#endif
+        )
+    {
+        goto not_found;
+    }
+
+    result = MMDB_lookup_sockaddr(gv->mmdb, sockaddr, &status);
+
+    if (status != MMDB_SUCCESS) {
+        if (status == MMDB_IPV6_LOOKUP_IN_IPV4_DATABASE_ERROR) {
+            goto not_found;
+        }
+
+        ngx_log_error(NGX_LOG_ERR, s->connection->log, 0,
+                      "MMDB_lookup_sockaddr() failed: %s",
+                      MMDB_strerror(status));
+        return NGX_ERROR;
+    }
+
+    if (!result.found_entry) {
+        goto not_found;
+    }
+
+    status = MMDB_aget_value(&result.entry, &entry, gv->path);
+
+    if (status != MMDB_SUCCESS) {
+        if (status == MMDB_LOOKUP_PATH_DOES_NOT_MATCH_DATA_ERROR) {
+            goto not_found;
+        }
+
+        ngx_log_error(NGX_LOG_ERR, s->connection->log, 0,
+                      "MMDB_aget_value() failed: %s",
+                      MMDB_strerror(status));
+        return NGX_ERROR;
+    }
+
+    if (!entry.has_data) {
+        goto not_found;
+    }
+
+    if (entry.type == MMDB_DATA_TYPE_UTF8_STRING) {
+        v->len = entry.data_size;
+        v->data = (u_char *) entry.utf8_string;
+
+    } else if (entry.type == MMDB_DATA_TYPE_BYTES) {
+        v->len = entry.data_size;
+        v->data = (u_char *) entry.bytes;
+
+    } else if (entry.type == MMDB_DATA_TYPE_DOUBLE
+               || entry.type == MMDB_DATA_TYPE_FLOAT)
+    {
+        v->data = ngx_pnalloc(s->connection->pool, NGX_INT64_LEN + 5);
+        if (v->data == NULL) {
+            return NGX_ERROR;
+        }
+
+        if (entry.type == MMDB_DATA_TYPE_DOUBLE) {
+            v->len = ngx_sprintf(v->data, "%.4f", entry.double_value)
+                     - v->data;
+
+        } else { /* MMDB_DATA_TYPE_FLOAT */
+            v->len = ngx_sprintf(v->data, "%.4f", (double) entry.float_value)
+                     - v->data;
+        }
+
+    } else if (entry.type == MMDB_DATA_TYPE_INT32
+               || entry.type == MMDB_DATA_TYPE_UINT16
+               || entry.type == MMDB_DATA_TYPE_UINT32
+               || entry.type == MMDB_DATA_TYPE_UINT64
+               || entry.type == MMDB_DATA_TYPE_BOOLEAN)
+    {
+        v->data = ngx_pnalloc(s->connection->pool, NGX_INT64_LEN);
+        if (v->data == NULL) {
+            return NGX_ERROR;
+        }
+
+        if (entry.type == MMDB_DATA_TYPE_INT32) {
+            v->len = ngx_sprintf(v->data, "%D", entry.int32) - v->data;
+
+        } else if (entry.type == MMDB_DATA_TYPE_UINT16) {
+            v->len = ngx_sprintf(v->data, "%uD", (uint32_t) entry.uint16)
+                     - v->data;
+
+        } else if (entry.type == MMDB_DATA_TYPE_UINT32) {
+            v->len = ngx_sprintf(v->data, "%uD", entry.uint32) - v->data;
+
+        } else if (entry.type == MMDB_DATA_TYPE_UINT64) {
+            v->len = ngx_sprintf(v->data, "%uL", entry.uint64) - v->data;
+
+        } else { /* MMDB_DATA_TYPE_BOOLEAN */
+            v->len = ngx_sprintf(v->data, "%uD", (uint32_t) entry.boolean)
+                     - v->data;
+        }
+
+    } else {
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0,
+                       "MMDB_aget_value(): unexpected entry type, %d",
+                       entry.type);
+        goto not_found;
+    }
+
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+
+    return NGX_OK;
+
+not_found:
+
+    v->not_found = 1;
+
+    return NGX_OK;
+}
+
+#endif
+
+
+#if (NGX_HAVE_GEOIP_LEGACY)
 
 static u_long
 ngx_stream_geoip_addr(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
@@ -562,6 +957,7 @@ ngx_stream_geoip_addr_v6(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
 }
 
 #endif
+#endif
 
 
 static ngx_int_t
@@ -623,6 +1019,46 @@ ngx_stream_geoip_country(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return NGX_CONF_ERROR;
     }
 
+#if (NGX_HAVE_GEOIP_MMDB)
+
+#if (NGX_HAVE_GEOIP_LEGACY)
+
+    if (ngx_stream_geoip_mmdb_file(&value[1]) != NGX_OK) {
+        goto legacy;
+    }
+
+#endif
+
+    gcf->country = ngx_stream_geoip_mmdb_open(cf, gcf, &value[1]);
+
+    if (gcf->country == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    gcf->country_mmdb = 1;
+
+    if (cf->args->nelts == 3) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid parameter \"%V\"", &value[2]);
+        return NGX_CONF_ERROR;
+    }
+
+    return NGX_CONF_OK;
+
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
+
+    if (ngx_stream_geoip_mmdb_file(&value[1]) == NGX_OK) {
+        return "does not support mmdb databases on this platform";
+    }
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+legacy:
+
+#endif
+
     gcf->country = GeoIP_open((char *) value[1].data, GEOIP_MEMORY_CACHE);
 
     if (gcf->country == NULL) {
@@ -643,7 +1079,7 @@ ngx_stream_geoip_country(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         }
     }
 
-    switch (gcf->country->databaseType) {
+    switch (((GeoIP *) gcf->country)->databaseType) {
 
     case GEOIP_COUNTRY_EDITION:
 
@@ -659,9 +1095,11 @@ ngx_stream_geoip_country(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     default:
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                            "invalid GeoIP database \"%V\" type:%d",
-                           &value[1], gcf->country->databaseType);
+                           &value[1], ((GeoIP *) gcf->country)->databaseType);
         return NGX_CONF_ERROR;
     }
+
+#endif
 }
 
 
@@ -681,6 +1119,46 @@ ngx_stream_geoip_org(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     if (ngx_conf_full_name(cf->cycle, &value[1], 0) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+#if (NGX_HAVE_GEOIP_LEGACY)
+
+    if (ngx_stream_geoip_mmdb_file(&value[1]) != NGX_OK) {
+        goto legacy;
+    }
+
+#endif
+
+    gcf->org = ngx_stream_geoip_mmdb_open(cf, gcf, &value[1]);
+
+    if (gcf->org == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    gcf->org_mmdb = 1;
+
+    if (cf->args->nelts == 3) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid parameter \"%V\"", &value[2]);
+        return NGX_CONF_ERROR;
+    }
+
+    return NGX_CONF_OK;
+
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
+
+    if (ngx_stream_geoip_mmdb_file(&value[1]) == NGX_OK) {
+        return "does not support mmdb databases on this platform";
+    }
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+legacy:
+
+#endif
 
     gcf->org = GeoIP_open((char *) value[1].data, GEOIP_MEMORY_CACHE);
 
@@ -702,7 +1180,7 @@ ngx_stream_geoip_org(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         }
     }
 
-    switch (gcf->org->databaseType) {
+    switch (((GeoIP *) gcf->org)->databaseType) {
 
     case GEOIP_ISP_EDITION:
     case GEOIP_ORG_EDITION:
@@ -724,9 +1202,11 @@ ngx_stream_geoip_org(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     default:
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                            "invalid GeoIP database \"%V\" type:%d",
-                           &value[1], gcf->org->databaseType);
+                           &value[1], ((GeoIP *) gcf->org)->databaseType);
         return NGX_CONF_ERROR;
     }
+
+#endif
 }
 
 
@@ -746,6 +1226,46 @@ ngx_stream_geoip_city(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     if (ngx_conf_full_name(cf->cycle, &value[1], 0) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+#if (NGX_HAVE_GEOIP_LEGACY)
+
+    if (ngx_stream_geoip_mmdb_file(&value[1]) != NGX_OK) {
+        goto legacy;
+    }
+
+#endif
+
+    gcf->city = ngx_stream_geoip_mmdb_open(cf, gcf, &value[1]);
+
+    if (gcf->city == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    gcf->city_mmdb = 1;
+
+    if (cf->args->nelts == 3) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid parameter \"%V\"", &value[2]);
+        return NGX_CONF_ERROR;
+    }
+
+    return NGX_CONF_OK;
+
+#endif
+
+#if (NGX_HAVE_GEOIP_LEGACY)
+
+    if (ngx_stream_geoip_mmdb_file(&value[1]) == NGX_OK) {
+        return "does not support mmdb databases on this platform";
+    }
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+legacy:
+
+#endif
 
     gcf->city = GeoIP_open((char *) value[1].data, GEOIP_MEMORY_CACHE);
 
@@ -767,7 +1287,7 @@ ngx_stream_geoip_city(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         }
     }
 
-    switch (gcf->city->databaseType) {
+    switch (((GeoIP *) gcf->city)->databaseType) {
 
     case GEOIP_CITY_EDITION_REV0:
     case GEOIP_CITY_EDITION_REV1:
@@ -785,10 +1305,166 @@ ngx_stream_geoip_city(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     default:
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                            "invalid GeoIP City database \"%V\" type:%d",
-                           &value[1], gcf->city->databaseType);
+                           &value[1], ((GeoIP *) gcf->city)->databaseType);
         return NGX_CONF_ERROR;
     }
+
+#endif
 }
+
+
+static char *
+ngx_stream_geoip_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+#if (NGX_HAVE_GEOIP_MMDB)
+
+    ngx_stream_geoip_conf_t  *gcf = conf;
+
+    u_char                       *key;
+    ngx_str_t                    *value;
+    ngx_uint_t                    i, n;
+    ngx_stream_variable_t        *v;
+    ngx_stream_geoip_variable_t  *gv;
+
+    value = cf->args->elts;
+
+    if (value[1].data[0] != '$') {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid variable name \"%V\"", &value[1]);
+        return NGX_CONF_ERROR;
+    }
+
+    value[1].len--;
+    value[1].data++;
+
+    v = ngx_stream_add_variable(cf, &value[1], NGX_STREAM_VAR_CHANGEABLE);
+    if (v == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    gv = ngx_palloc(cf->pool, sizeof(ngx_stream_geoip_variable_t));
+    if (gv == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    v->get_handler = ngx_stream_geoip_mmdb_variable;
+    v->data = (uintptr_t) gv;
+
+    /* database file name */
+
+    if (ngx_conf_full_name(cf->cycle, &value[2], 0) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+
+    gv->mmdb = ngx_stream_geoip_mmdb_open(cf, gcf, &value[2]);
+
+    if (gv->mmdb == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    /* data path specification */
+
+    n = 0;
+    for (i = 0; i < value[3].len; i++) {
+        if (value[3].data[i] == '.') {
+            n++;
+        }
+    }
+
+    gv->path = ngx_pcalloc(cf->pool, (n + 2) * sizeof(char *));
+    if (gv->path == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    n = 0;
+    key = &value[3].data[0];
+
+    for (i = 0; i < value[3].len; i++) {
+        if (value[3].data[i] != '.') {
+            continue;
+        }
+
+        value[3].data[i] = '\0';
+        gv->path[n++] = (char *) key;
+        key = &value[3].data[i + 1];
+    }
+
+    gv->path[n++] = (char *) key;
+    gv->path[n] = NULL;
+
+    return NGX_CONF_OK;
+
+#else
+    return "is not supported on this platform";
+#endif
+}
+
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+static MMDB_s *
+ngx_stream_geoip_mmdb_open(ngx_conf_t *cf, ngx_stream_geoip_conf_t *gcf,
+    ngx_str_t *file)
+{
+    int          status;
+    MMDB_s      *mmdb;
+    ngx_uint_t   i;
+
+    if (gcf->mmdb == NULL) {
+        gcf->mmdb = ngx_array_create(cf->pool, 1, sizeof(MMDB_s));
+        if (gcf->mmdb == NULL) {
+            return NULL;
+        }
+    }
+
+    mmdb = gcf->mmdb->elts;
+    for (i = 0; i < gcf->mmdb->nelts; i++) {
+        if (ngx_strcmp(mmdb[i].filename, file->data) == 0) {
+            return &mmdb[i];
+        }
+    }
+
+    mmdb = ngx_array_push(gcf->mmdb);
+    if (mmdb == NULL) {
+        return NULL;
+    }
+
+    status = MMDB_open((char *) file->data, 0, mmdb);
+
+    if (status != MMDB_SUCCESS) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf,
+                           (status == MMDB_IO_ERROR) ? ngx_errno : 0,
+                           "MMDB_open(\"%V\") failed: %s",
+                           file, MMDB_strerror(status));
+
+        gcf->mmdb->nelts--;
+
+        return NULL;
+    }
+
+    return mmdb;
+}
+
+#endif
+
+
+#if (NGX_HAVE_GEOIP_LEGACY)
+
+static ngx_int_t
+ngx_stream_geoip_mmdb_file(ngx_str_t *file)
+{
+    if (file->len < sizeof(".mmdb") - 1
+        || ngx_strncasecmp(file->data + file->len - (sizeof(".mmdb") - 1),
+                           (u_char *) ".mmdb", sizeof(".mmdb") - 1)
+           != 0)
+    {
+        return NGX_DECLINED;
+    }
+
+    return NGX_OK;
+}
+
+#endif
 
 
 static void
@@ -796,15 +1472,33 @@ ngx_stream_geoip_cleanup(void *data)
 {
     ngx_stream_geoip_conf_t  *gcf = data;
 
-    if (gcf->country) {
+#if (NGX_HAVE_GEOIP_LEGACY)
+
+    if (gcf->country && !gcf->country_mmdb) {
         GeoIP_delete(gcf->country);
     }
 
-    if (gcf->org) {
+    if (gcf->org && !gcf->org_mmdb) {
         GeoIP_delete(gcf->org);
     }
 
-    if (gcf->city) {
+    if (gcf->city && !gcf->city_mmdb) {
         GeoIP_delete(gcf->city);
     }
+
+#endif
+
+#if (NGX_HAVE_GEOIP_MMDB)
+
+    if (gcf->mmdb) {
+        MMDB_s      *mmdb;
+        ngx_uint_t   i;
+
+        mmdb = gcf->mmdb->elts;
+        for (i = 0; i < gcf->mmdb->nelts; i++) {
+            MMDB_close(&mmdb[i]);
+        }
+    }
+
+#endif
 }
