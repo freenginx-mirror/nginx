@@ -30,12 +30,6 @@ typedef struct {
 } ngx_stream_geoip_conf_t;
 
 
-typedef struct {
-    ngx_str_t    *name;
-    uintptr_t     data;
-} ngx_stream_geoip_var_t;
-
-
 typedef const char *(*ngx_stream_geoip_variable_handler_pt)(GeoIP *,
     u_long addr);
 
