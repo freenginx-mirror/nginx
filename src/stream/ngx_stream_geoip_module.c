@@ -499,21 +499,19 @@ ngx_stream_geoip_get_city_record(ngx_stream_session_t *s)
 static u_long
 ngx_stream_geoip_addr(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
 {
-    ngx_addr_t           addr;
+    struct sockaddr     *sockaddr;
     struct sockaddr_in  *sin;
 
-    addr.sockaddr = s->connection->sockaddr;
-    addr.socklen = s->connection->socklen;
-    /* addr.name = s->connection->addr_text; */
+    sockaddr = s->connection->sockaddr;
 
 #if (NGX_HAVE_INET6)
 
-    if (addr.sockaddr->sa_family == AF_INET6) {
+    if (sockaddr->sa_family == AF_INET6) {
         u_char           *p;
         in_addr_t         inaddr;
         struct in6_addr  *inaddr6;
 
-        inaddr6 = &((struct sockaddr_in6 *) addr.sockaddr)->sin6_addr;
+        inaddr6 = &((struct sockaddr_in6 *) sockaddr)->sin6_addr;
 
         if (IN6_IS_ADDR_V4MAPPED(inaddr6)) {
             p = inaddr6->s6_addr;
@@ -529,11 +527,11 @@ ngx_stream_geoip_addr(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
 
 #endif
 
-    if (addr.sockaddr->sa_family != AF_INET) {
+    if (sockaddr->sa_family != AF_INET) {
         return INADDR_NONE;
     }
 
-    sin = (struct sockaddr_in *) addr.sockaddr;
+    sin = (struct sockaddr_in *) sockaddr;
     return ntohl(sin->sin_addr.s_addr);
 }
 
@@ -543,21 +541,19 @@ ngx_stream_geoip_addr(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
 static geoipv6_t
 ngx_stream_geoip_addr_v6(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
 {
-    ngx_addr_t            addr;
     in_addr_t             addr4;
     struct in6_addr       addr6;
+    struct sockaddr      *sockaddr;
     struct sockaddr_in   *sin;
     struct sockaddr_in6  *sin6;
 
-    addr.sockaddr = s->connection->sockaddr;
-    addr.socklen = s->connection->socklen;
-    /* addr.name = s->connection->addr_text; */
+    sockaddr = s->connection->sockaddr;
 
-    switch (addr.sockaddr->sa_family) {
+    switch (sockaddr->sa_family) {
 
     case AF_INET:
         /* Produce IPv4-mapped IPv6 address. */
-        sin = (struct sockaddr_in *) addr.sockaddr;
+        sin = (struct sockaddr_in *) sockaddr;
         addr4 = ntohl(sin->sin_addr.s_addr);
 
         ngx_memzero(&addr6, sizeof(struct in6_addr));
@@ -570,7 +566,7 @@ ngx_stream_geoip_addr_v6(ngx_stream_session_t *s, ngx_stream_geoip_conf_t *gcf)
         return addr6;
 
     case AF_INET6:
-        sin6 = (struct sockaddr_in6 *) addr.sockaddr;
+        sin6 = (struct sockaddr_in6 *) sockaddr;
         return sin6->sin6_addr;
 
     default:

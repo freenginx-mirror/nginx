@@ -78,6 +78,8 @@ static u_long ngx_http_geoip_addr(ngx_http_request_t *r,
 static geoipv6_t ngx_http_geoip_addr_v6(ngx_http_request_t *r,
     ngx_http_geoip_conf_t *gcf);
 #endif
+static struct sockaddr *ngx_http_geoip_sockaddr(ngx_http_request_t *r,
+    ngx_http_geoip_conf_t *gcf);
 
 static ngx_int_t ngx_http_geoip_add_variables(ngx_conf_t *cf);
 static void *ngx_http_geoip_create_conf(ngx_conf_t *cf);
@@ -521,29 +523,19 @@ ngx_http_geoip_get_city_record(ngx_http_request_t *r)
 static u_long
 ngx_http_geoip_addr(ngx_http_request_t *r, ngx_http_geoip_conf_t *gcf)
 {
-    ngx_addr_t           addr;
-    ngx_table_elt_t     *xfwd;
+    struct sockaddr     *sockaddr;
     struct sockaddr_in  *sin;
 
-    addr.sockaddr = r->connection->sockaddr;
-    addr.socklen = r->connection->socklen;
-    /* addr.name = r->connection->addr_text; */
-
-    xfwd = r->headers_in.x_forwarded_for;
-
-    if (xfwd != NULL && gcf->proxies != NULL) {
-        (void) ngx_http_get_forwarded_addr(r, &addr, xfwd, NULL,
-                                           gcf->proxies, gcf->proxy_recursive);
-    }
+    sockaddr = ngx_http_geoip_sockaddr(r, gcf);
 
 #if (NGX_HAVE_INET6)
 
-    if (addr.sockaddr->sa_family == AF_INET6) {
+    if (sockaddr->sa_family == AF_INET6) {
         u_char           *p;
         in_addr_t         inaddr;
         struct in6_addr  *inaddr6;
 
-        inaddr6 = &((struct sockaddr_in6 *) addr.sockaddr)->sin6_addr;
+        inaddr6 = &((struct sockaddr_in6 *) sockaddr)->sin6_addr;
 
         if (IN6_IS_ADDR_V4MAPPED(inaddr6)) {
             p = inaddr6->s6_addr;
@@ -559,11 +551,11 @@ ngx_http_geoip_addr(ngx_http_request_t *r, ngx_http_geoip_conf_t *gcf)
 
 #endif
 
-    if (addr.sockaddr->sa_family != AF_INET) {
+    if (sockaddr->sa_family != AF_INET) {
         return INADDR_NONE;
     }
 
-    sin = (struct sockaddr_in *) addr.sockaddr;
+    sin = (struct sockaddr_in *) sockaddr;
     return ntohl(sin->sin_addr.s_addr);
 }
 
@@ -573,29 +565,19 @@ ngx_http_geoip_addr(ngx_http_request_t *r, ngx_http_geoip_conf_t *gcf)
 static geoipv6_t
 ngx_http_geoip_addr_v6(ngx_http_request_t *r, ngx_http_geoip_conf_t *gcf)
 {
-    ngx_addr_t            addr;
-    ngx_table_elt_t      *xfwd;
     in_addr_t             addr4;
     struct in6_addr       addr6;
+    struct sockaddr      *sockaddr;
     struct sockaddr_in   *sin;
     struct sockaddr_in6  *sin6;
 
-    addr.sockaddr = r->connection->sockaddr;
-    addr.socklen = r->connection->socklen;
-    /* addr.name = r->connection->addr_text; */
+    sockaddr = ngx_http_geoip_sockaddr(r, gcf);
 
-    xfwd = r->headers_in.x_forwarded_for;
-
-    if (xfwd != NULL && gcf->proxies != NULL) {
-        (void) ngx_http_get_forwarded_addr(r, &addr, xfwd, NULL,
-                                           gcf->proxies, gcf->proxy_recursive);
-    }
-
-    switch (addr.sockaddr->sa_family) {
+    switch (sockaddr->sa_family) {
 
     case AF_INET:
         /* Produce IPv4-mapped IPv6 address. */
-        sin = (struct sockaddr_in *) addr.sockaddr;
+        sin = (struct sockaddr_in *) sockaddr;
         addr4 = ntohl(sin->sin_addr.s_addr);
 
         ngx_memzero(&addr6, sizeof(struct in6_addr));
@@ -608,7 +590,7 @@ ngx_http_geoip_addr_v6(ngx_http_request_t *r, ngx_http_geoip_conf_t *gcf)
         return addr6;
 
     case AF_INET6:
-        sin6 = (struct sockaddr_in6 *) addr.sockaddr;
+        sin6 = (struct sockaddr_in6 *) sockaddr;
         return sin6->sin6_addr;
 
     default:
@@ -617,6 +599,27 @@ ngx_http_geoip_addr_v6(ngx_http_request_t *r, ngx_http_geoip_conf_t *gcf)
 }
 
 #endif
+
+
+static struct sockaddr *
+ngx_http_geoip_sockaddr(ngx_http_request_t *r, ngx_http_geoip_conf_t *gcf)
+{
+    ngx_addr_t        addr;
+    ngx_table_elt_t  *xfwd;
+
+    addr.sockaddr = r->connection->sockaddr;
+    addr.socklen = r->connection->socklen;
+    /* addr.name = r->connection->addr_text; */
+
+    xfwd = r->headers_in.x_forwarded_for;
+
+    if (xfwd != NULL && gcf->proxies != NULL) {
+        (void) ngx_http_get_forwarded_addr(r, &addr, xfwd, NULL,
+                                           gcf->proxies, gcf->proxy_recursive);
+    }
+
+    return addr.sockaddr;
+}
 
 
 static ngx_int_t
