@@ -30,34 +30,6 @@ typedef struct {
 } ngx_stream_geoip_conf_t;
 
 
-typedef const char *(*ngx_stream_geoip_variable_handler_pt)(GeoIP *,
-    u_long addr);
-
-
-ngx_stream_geoip_variable_handler_pt ngx_stream_geoip_country_functions[] = {
-    GeoIP_country_code_by_ipnum,
-    GeoIP_country_code3_by_ipnum,
-    GeoIP_country_name_by_ipnum,
-};
-
-
-#if (NGX_HAVE_GEOIP_V6)
-
-typedef const char *(*ngx_stream_geoip_variable_handler_v6_pt)(GeoIP *,
-    geoipv6_t addr);
-
-
-ngx_stream_geoip_variable_handler_v6_pt
-    ngx_stream_geoip_country_v6_functions[] =
-{
-    GeoIP_country_code_by_ipnum_v6,
-    GeoIP_country_code3_by_ipnum_v6,
-    GeoIP_country_name_by_ipnum_v6,
-};
-
-#endif
-
-
 static ngx_int_t ngx_stream_geoip_country_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data);
 static ngx_int_t ngx_stream_geoip_org_variable(ngx_stream_session_t *s,
@@ -219,13 +191,6 @@ static ngx_int_t
 ngx_stream_geoip_country_variable(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data)
 {
-    ngx_stream_geoip_variable_handler_pt     handler =
-        ngx_stream_geoip_country_functions[data];
-#if (NGX_HAVE_GEOIP_V6)
-    ngx_stream_geoip_variable_handler_v6_pt  handler_v6 =
-        ngx_stream_geoip_country_v6_functions[data];
-#endif
-
     const char               *val;
     ngx_stream_geoip_conf_t  *gcf;
 
@@ -236,12 +201,35 @@ ngx_stream_geoip_country_variable(ngx_stream_session_t *s,
     }
 
 #if (NGX_HAVE_GEOIP_V6)
-    val = gcf->country_v6
-              ? handler_v6(gcf->country, ngx_stream_geoip_addr_v6(s, gcf))
-              : handler(gcf->country, ngx_stream_geoip_addr(s, gcf));
-#else
-    val = handler(gcf->country, ngx_stream_geoip_addr(s, gcf));
+    if (gcf->country_v6) {
+        if (data == NGX_GEOIP_COUNTRY_CODE) {
+            val = GeoIP_country_code_by_ipnum_v6(gcf->country,
+                                             ngx_stream_geoip_addr_v6(s, gcf));
+
+        } else if (data == NGX_GEOIP_COUNTRY_CODE3) {
+            val = GeoIP_country_code3_by_ipnum_v6(gcf->country,
+                                             ngx_stream_geoip_addr_v6(s, gcf));
+
+        } else { /* NGX_GEOIP_COUNTRY_NAME */
+            val = GeoIP_country_name_by_ipnum_v6(gcf->country,
+                                             ngx_stream_geoip_addr_v6(s, gcf));
+        }
+    } else
 #endif
+    {
+        if (data == NGX_GEOIP_COUNTRY_CODE) {
+            val = GeoIP_country_code_by_ipnum(gcf->country,
+                                              ngx_stream_geoip_addr(s, gcf));
+
+        } else if (data == NGX_GEOIP_COUNTRY_CODE3) {
+            val = GeoIP_country_code3_by_ipnum(gcf->country,
+                                               ngx_stream_geoip_addr(s, gcf));
+
+        } else { /* NGX_GEOIP_COUNTRY_NAME */
+            val = GeoIP_country_name_by_ipnum(gcf->country,
+                                              ngx_stream_geoip_addr(s, gcf));
+        }
+    }
 
     if (val == NULL) {
         goto not_found;
@@ -278,14 +266,15 @@ ngx_stream_geoip_org_variable(ngx_stream_session_t *s,
     }
 
 #if (NGX_HAVE_GEOIP_V6)
-    val = gcf->org_v6
-              ? GeoIP_name_by_ipnum_v6(gcf->org,
-                                       ngx_stream_geoip_addr_v6(s, gcf))
-              : GeoIP_name_by_ipnum(gcf->org,
-                                    ngx_stream_geoip_addr(s, gcf));
-#else
-    val = GeoIP_name_by_ipnum(gcf->org, ngx_stream_geoip_addr(s, gcf));
+    if (gcf->org_v6) {
+        val = GeoIP_name_by_ipnum_v6(gcf->org,
+                                     ngx_stream_geoip_addr_v6(s, gcf));
+
+    } else
 #endif
+    {
+        val = GeoIP_name_by_ipnum(gcf->org, ngx_stream_geoip_addr(s, gcf));
+    }
 
     if (val == NULL) {
         goto not_found;
@@ -482,14 +471,12 @@ ngx_stream_geoip_get_city_record(ngx_stream_session_t *s)
 
     if (gcf->city) {
 #if (NGX_HAVE_GEOIP_V6)
-        return gcf->city_v6
-                   ? GeoIP_record_by_ipnum_v6(gcf->city,
-                                              ngx_stream_geoip_addr_v6(s, gcf))
-                   : GeoIP_record_by_ipnum(gcf->city,
-                                           ngx_stream_geoip_addr(s, gcf));
-#else
-        return GeoIP_record_by_ipnum(gcf->city, ngx_stream_geoip_addr(s, gcf));
+        if (gcf->city_v6) {
+            return GeoIP_record_by_ipnum_v6(gcf->city,
+                                            ngx_stream_geoip_addr_v6(s, gcf));
+        }
 #endif
+        return GeoIP_record_by_ipnum(gcf->city, ngx_stream_geoip_addr(s, gcf));
     }
 
     return NULL;
