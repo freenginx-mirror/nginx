@@ -1112,13 +1112,15 @@ ngx_http_geoip_country(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 #if (NGX_HAVE_GEOIP_LEGACY)
 
-    if (ngx_http_geoip_mmdb_file(&value[1]) == NGX_OK) {
-        return "does not support mmdb databases on this platform";
-    }
-
 #if (NGX_HAVE_GEOIP_MMDB)
 
 legacy:
+
+#else
+
+    if (ngx_http_geoip_mmdb_file(&value[1]) == NGX_OK) {
+        return "does not support mmdb databases on this platform";
+    }
 
 #endif
 
@@ -1213,13 +1215,15 @@ ngx_http_geoip_org(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 #if (NGX_HAVE_GEOIP_LEGACY)
 
-    if (ngx_http_geoip_mmdb_file(&value[1]) == NGX_OK) {
-        return "does not support mmdb databases on this platform";
-    }
-
 #if (NGX_HAVE_GEOIP_MMDB)
 
 legacy:
+
+#else
+
+    if (ngx_http_geoip_mmdb_file(&value[1]) == NGX_OK) {
+        return "does not support mmdb databases on this platform";
+    }
 
 #endif
 
@@ -1320,13 +1324,15 @@ ngx_http_geoip_city(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 #if (NGX_HAVE_GEOIP_LEGACY)
 
-    if (ngx_http_geoip_mmdb_file(&value[1]) == NGX_OK) {
-        return "does not support mmdb databases on this platform";
-    }
-
 #if (NGX_HAVE_GEOIP_MMDB)
 
 legacy:
+
+#else
+
+    if (ngx_http_geoip_mmdb_file(&value[1]) == NGX_OK) {
+        return "does not support mmdb databases on this platform";
+    }
 
 #endif
 
