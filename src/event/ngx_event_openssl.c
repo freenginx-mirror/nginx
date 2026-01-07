@@ -2423,7 +2423,7 @@ ngx_ssl_handshake(ngx_connection_t *c)
         return NGX_AGAIN;
     }
 
-    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_errno : 0;
+    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_socket_errno : 0;
 
     c->ssl->no_wait_shutdown = 1;
     c->ssl->no_send_shutdown = 1;
@@ -2570,7 +2570,7 @@ ngx_ssl_try_early_data(ngx_connection_t *c)
         return NGX_AGAIN;
     }
 
-    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_errno : 0;
+    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_socket_errno : 0;
 
     c->ssl->no_wait_shutdown = 1;
     c->ssl->no_send_shutdown = 1;
@@ -3039,7 +3039,7 @@ ngx_ssl_handle_recv(ngx_connection_t *c, int n)
 
     sslerr = SSL_get_error(c->ssl->connection, n);
 
-    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_errno : 0;
+    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_socket_errno : 0;
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0, "SSL_get_error: %d", sslerr);
 
@@ -3363,7 +3363,7 @@ ngx_ssl_write(ngx_connection_t *c, u_char *data, size_t size)
         sslerr = SSL_ERROR_SYSCALL;
     }
 
-    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_errno : 0;
+    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_socket_errno : 0;
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0, "SSL_get_error: %d", sslerr);
 
@@ -3467,7 +3467,7 @@ ngx_ssl_write_early(ngx_connection_t *c, u_char *data, size_t size)
 
     sslerr = SSL_get_error(c->ssl->connection, n);
 
-    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_errno : 0;
+    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_socket_errno : 0;
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0, "SSL_get_error: %d", sslerr);
 
@@ -3624,7 +3624,7 @@ ngx_ssl_sendfile(ngx_connection_t *c, ngx_buf_t *file, size_t size)
 
     if (sslerr == SSL_ERROR_SSL
         && ERR_GET_REASON(ERR_peek_error()) == SSL_R_UNINITIALIZED
-        && ngx_errno != 0)
+        && ngx_socket_errno != 0)
     {
         /*
          * OpenSSL fails to return SSL_ERROR_SYSCALL if an error
@@ -3635,7 +3635,7 @@ ngx_ssl_sendfile(ngx_connection_t *c, ngx_buf_t *file, size_t size)
         sslerr = SSL_ERROR_SYSCALL;
     }
 
-    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_errno : 0;
+    err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_socket_errno : 0;
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0, "SSL_get_error: %d", sslerr);
 
@@ -3656,7 +3656,7 @@ ngx_ssl_sendfile(ngx_connection_t *c, ngx_buf_t *file, size_t size)
 
 #if (NGX_HAVE_SENDFILE_NODISKIO)
 
-        if (ngx_errno == EBUSY) {
+        if (ngx_socket_errno == EBUSY) {
             c->busy_count++;
 
             ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0,
@@ -3848,7 +3848,7 @@ ngx_ssl_shutdown(ngx_connection_t *c)
             goto done;
         }
 
-        err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_errno : 0;
+        err = (sslerr == SSL_ERROR_SYSCALL) ? ngx_socket_errno : 0;
 
         ngx_ssl_connection_error(c, sslerr, err, "SSL_shutdown() failed");
 
