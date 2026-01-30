@@ -3680,7 +3680,7 @@ ngx_ssl_sendfile(ngx_connection_t *c, ngx_buf_t *file, size_t size)
 
 #if (NGX_HAVE_SENDFILE_NODISKIO)
 
-        if (err == EBUSY) {
+        if (err == NGX_EBUSY) {
             c->busy_count++;
 
             ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0,
