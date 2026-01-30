@@ -3576,7 +3576,7 @@ ngx_ssl_sendfile(ngx_connection_t *c, ngx_buf_t *file, size_t size)
                    "SSL to sendfile: @%O %uz",
                    file->file_pos, size);
 
-    ngx_set_errno(0);
+    ngx_set_socket_errno(0);
 
 #if (NGX_HAVE_SENDFILE_NODISKIO)
 
