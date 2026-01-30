@@ -3277,6 +3277,10 @@ ngx_ssl_send_chain(ngx_connection_t *c, ngx_chain_t *in, off_t limit)
                 send += n;
                 flush = 0;
 
+                if (!c->write->ready) {
+                    break;
+                }
+
                 continue;
             }
 
@@ -3595,7 +3599,7 @@ ngx_ssl_sendfile(ngx_connection_t *c, ngx_buf_t *file, size_t size)
 
     err = ngx_socket_errno;
 
-    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0, "SSL_sendfile: %z", n);
+    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, err, "SSL_sendfile: %z", n);
 
     if (n > 0) {
 
@@ -3617,6 +3621,16 @@ ngx_ssl_sendfile(ngx_connection_t *c, ngx_buf_t *file, size_t size)
 #endif
 
         c->sent += n;
+
+        /*
+         * on FreeBSD sendfile(), along with the number of bytes sent,
+         * returns an error with errno set to EAGAIN when the socket buffer
+         * is full
+         */
+
+        if (err == NGX_EAGAIN) {
+            c->write->ready = 0;
+        }
 
         return n;
     }
