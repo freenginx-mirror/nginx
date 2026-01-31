@@ -2584,24 +2584,43 @@ ngx_http_upstream_test_next(ngx_http_request_t *r, ngx_http_upstream_t *u)
             continue;
         }
 
-        timeout = u->conf->next_upstream_timeout;
+        if (u->conf->next_upstream & un->mask) {
 
-        if (u->request_sent
-            && (r->method & (NGX_HTTP_POST|NGX_HTTP_LOCK|NGX_HTTP_PATCH)))
-        {
-            mask = un->mask | NGX_HTTP_UPSTREAM_FT_NON_IDEMPOTENT;
+            timeout = u->conf->next_upstream_timeout;
 
-        } else {
-            mask = un->mask;
-        }
+            if (u->request_sent
+                && (r->method & (NGX_HTTP_POST|NGX_HTTP_LOCK|NGX_HTTP_PATCH)))
+            {
+                mask = un->mask | NGX_HTTP_UPSTREAM_FT_NON_IDEMPOTENT;
 
-        if (u->peer.tries > 1
-            && ((u->conf->next_upstream & mask) == mask)
-            && !(u->request_sent && r->request_body_no_buffering)
-            && !(timeout && ngx_current_msec - u->peer.start_time >= timeout))
-        {
-            ngx_http_upstream_next(r, u, un->mask);
-            return NGX_OK;
+            } else {
+                mask = un->mask;
+            }
+
+            if (u->peer.tries > 1
+                && ((u->conf->next_upstream & mask) == mask)
+                && !(u->request_sent && r->request_body_no_buffering)
+                && !(timeout
+                     && ngx_current_msec - u->peer.start_time >= timeout))
+            {
+                ngx_http_upstream_next(r, u, un->mask);
+                return NGX_OK;
+            }
+
+            /*
+             * if we were expected to switch to the next server, but
+             * were not able to do so due to additional restrictions,
+             * remember that the peer failed
+             */
+
+            if (un->mask == NGX_HTTP_UPSTREAM_FT_HTTP_403
+                || un->mask == NGX_HTTP_UPSTREAM_FT_HTTP_404)
+            {
+                u->peer_state = NGX_PEER_NEXT;
+
+            } else {
+                u->peer_state = NGX_PEER_FAILED;
+            }
         }
 
 #if (NGX_HTTP_CACHE)
@@ -4623,7 +4642,7 @@ ngx_http_upstream_finalize_request(ngx_http_request_t *r,
     u->finalize_request(r, rc);
 
     if (u->peer.free && u->peer.sockaddr) {
-        u->peer.free(&u->peer, u->peer.data, 0);
+        u->peer.free(&u->peer, u->peer.data, u->peer_state);
         u->peer.sockaddr = NULL;
     }
 
