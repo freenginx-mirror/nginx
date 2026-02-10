@@ -7,6 +7,67 @@
 <section title="freenginx">
 
 
+<changes ver="1.29.5" date="2026-02-10">
+
+<change type="feature">
+<para lang="ru">
+оптимизация использования SSL_sendfile() на FreeBSD.<br/>
+Спасибо Глебу Смирнову.
+</para>
+<para lang="en">
+optimized SSL_sendfile() usage on FreeBSD.<br/>
+Thanks to Gleb Smirnoff.
+</para>
+</change>
+
+<change type="bugfix">
+<para lang="ru">
+бэкенды не признавались неработающими
+после получения ответа
+с кодом 500, 502, 503, 504 или 429,
+если соответствующий код был указан
+в директиве proxy_next_upstream,
+но передача запроса на другой сервер была невозможна.
+</para>
+<para lang="en">
+upstream servers were not marked as failed
+after a response
+with status code 500, 502, 503, 504, or 429
+if the code was listed in
+the "proxy_next_upstream" directive,
+but switching to the next server was not possible.
+</para>
+</change>
+
+<change type="bugfix">
+<para lang="ru">
+расширение управления кэшированием stale-if-error не применялось,
+если бэкенд возвращал ответ
+с кодом 500, 502, 503, 504 или 429
+и соответствующий код был указан
+в директиве proxy_next_upstream.
+</para>
+<para lang="en">
+the "stale-if-error" cache control extension was not applied
+if a backend returned a response
+with status code 500, 502, 503, 504, or 429
+and the code was listed in
+the "proxy_next_upstream" directive.
+</para>
+</change>
+
+<change type="bugfix">
+<para lang="ru">
+в обработке преждевременных ответов бэкендов.
+</para>
+<para lang="en">
+in handling of premature backend responses.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.29.4" date="2025-12-16">
 
 <change type="feature">
