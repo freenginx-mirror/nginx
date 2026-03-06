@@ -544,7 +544,7 @@ ngx_http_xslt_sax_error(void *data, const char *msg, ...)
     va_list                      args;
     ngx_uint_t                   truncated;
     ngx_http_xslt_filter_ctx_t  *ctx;
-    u_char                       buf[NGX_MAX_ERROR_STR];
+    u_char                       buf[NGX_MAX_CONF_ERRSTR];
 
     ctx = ctxt->sax->_private;
 
@@ -552,7 +552,7 @@ ngx_http_xslt_sax_error(void *data, const char *msg, ...)
     truncated = 0;
 
     va_start(args, msg);
-    n = vsnprintf((char *) buf, NGX_MAX_ERROR_STR, msg, args);
+    n = vsnprintf((char *) buf, NGX_MAX_CONF_ERRSTR, msg, args);
     va_end(args);
 
     if (n < 0) {
@@ -560,8 +560,8 @@ ngx_http_xslt_sax_error(void *data, const char *msg, ...)
         truncated = 1;
     }
 
-    if (n >= NGX_MAX_ERROR_STR) {
-        n = NGX_MAX_ERROR_STR - 1;
+    if (n >= NGX_MAX_CONF_ERRSTR) {
+        n = NGX_MAX_CONF_ERRSTR - 1;
         truncated = 1;
     }
 
