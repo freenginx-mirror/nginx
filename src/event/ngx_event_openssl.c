@@ -2023,6 +2023,7 @@ failed:
         if (hpkey == NULL) {
             ngx_ssl_error(NGX_LOG_EMERG, ssl->log, 0,
                           "EVP_HPKE_KEY_new() failed");
+            goto failed;
         }
 
         if (EVP_HPKE_KEY_init(hpkey, EVP_hpke_x25519_hkdf_sha256(),
