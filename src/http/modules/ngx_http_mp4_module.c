@@ -3606,7 +3606,7 @@ ngx_http_mp4_update_stco_atom(ngx_http_mp4_file_t *mp4,
         return NGX_ERROR;
     }
 
-    if (trak->start_chunk > trak->chunks) {
+    if (trak->start_chunk >= trak->chunks) {
         ngx_log_error(NGX_LOG_ERR, mp4->file.log, 0,
                       "start time is out mp4 stco chunks in \"%s\"",
                       mp4->file.name.data);
@@ -3823,7 +3823,7 @@ ngx_http_mp4_update_co64_atom(ngx_http_mp4_file_t *mp4,
         return NGX_ERROR;
     }
 
-    if (trak->start_chunk > trak->chunks) {
+    if (trak->start_chunk >= trak->chunks) {
         ngx_log_error(NGX_LOG_ERR, mp4->file.log, 0,
                       "start time is out mp4 co64 chunks in \"%s\"",
                       mp4->file.name.data);
