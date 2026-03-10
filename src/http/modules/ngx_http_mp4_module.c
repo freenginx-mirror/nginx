@@ -2528,13 +2528,14 @@ ngx_http_mp4_seek_key_frame(ngx_http_mp4_file_t *mp4, ngx_http_mp4_trak_t *trak,
     entry = (uint32_t *) data->pos;
     end = (uint32_t *) data->last;
 
-    /* sync samples starts from 1 */
-    start_sample++;
-
     key_prefix = 0;
 
     while (entry < end) {
         sample = ngx_mp4_get_32value(entry);
+
+        /* sync samples starts from 1 */
+        sample--;
+
         if (sample > start_sample) {
             break;
         }
