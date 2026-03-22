@@ -1278,6 +1278,9 @@ ngx_ssl_verify_callback(int ok, X509_STORE_CTX *x509_store)
     char              *subject, *issuer;
     int                err, depth;
     X509              *cert;
+#if OPENSSL_VERSION_NUMBER >= 0x40000000L
+    const
+#endif
     X509_NAME         *sname, *iname;
     ngx_connection_t  *c;
     ngx_ssl_conn_t    *ssl_conn;
@@ -6328,6 +6331,9 @@ ngx_ssl_get_subject_dn(ngx_connection_t *c, ngx_pool_t *pool, ngx_str_t *s)
 {
     BIO        *bio;
     X509       *cert;
+#if OPENSSL_VERSION_NUMBER >= 0x40000000L
+    const
+#endif
     X509_NAME  *name;
 
     s->len = 0;
@@ -6382,6 +6388,9 @@ ngx_ssl_get_issuer_dn(ngx_connection_t *c, ngx_pool_t *pool, ngx_str_t *s)
 {
     BIO        *bio;
     X509       *cert;
+#if OPENSSL_VERSION_NUMBER >= 0x40000000L
+    const
+#endif
     X509_NAME  *name;
 
     s->len = 0;
@@ -6438,6 +6447,9 @@ ngx_ssl_get_subject_dn_legacy(ngx_connection_t *c, ngx_pool_t *pool,
     char       *p;
     size_t      len;
     X509       *cert;
+#if OPENSSL_VERSION_NUMBER >= 0x40000000L
+    const
+#endif
     X509_NAME  *name;
 
     s->len = 0;
@@ -6486,6 +6498,9 @@ ngx_ssl_get_issuer_dn_legacy(ngx_connection_t *c, ngx_pool_t *pool,
     char       *p;
     size_t      len;
     X509       *cert;
+#if OPENSSL_VERSION_NUMBER >= 0x40000000L
+    const
+#endif
     X509_NAME  *name;
 
     s->len = 0;

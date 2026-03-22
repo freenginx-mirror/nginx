@@ -2629,9 +2629,9 @@ ngx_ssl_ocsp_cache_store(ngx_ssl_ocsp_ctx_t *ctx)
 static ngx_int_t
 ngx_ssl_ocsp_create_key(ngx_ssl_ocsp_ctx_t *ctx)
 {
-    u_char        *p;
-    X509_NAME     *name;
-    ASN1_INTEGER  *serial;
+    u_char           *p;
+    ASN1_INTEGER     *serial;
+    const X509_NAME  *name;
 
     p = ngx_pnalloc(ctx->pool, 60);
     if (p == NULL) {
