@@ -3377,6 +3377,8 @@ ngx_ssl_write(ngx_connection_t *c, u_char *data, size_t size)
 
     sslerr = SSL_get_error(c->ssl->connection, n);
 
+    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0, "SSL_get_error: %d", sslerr);
+
     if (sslerr == SSL_ERROR_ZERO_RETURN) {
 
         /*
@@ -3388,8 +3390,6 @@ ngx_ssl_write(ngx_connection_t *c, u_char *data, size_t size)
 
         sslerr = SSL_ERROR_SYSCALL;
     }
-
-    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0, "SSL_get_error: %d", sslerr);
 
     if (sslerr == SSL_ERROR_WANT_WRITE) {
 
@@ -3655,6 +3655,8 @@ ngx_ssl_sendfile(ngx_connection_t *c, ngx_buf_t *file, size_t size)
 
     sslerr = SSL_get_error(c->ssl->connection, n);
 
+    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0, "SSL_get_error: %d", sslerr);
+
     if (sslerr == SSL_ERROR_ZERO_RETURN) {
 
         /*
@@ -3678,8 +3680,6 @@ ngx_ssl_sendfile(ngx_connection_t *c, ngx_buf_t *file, size_t size)
 
         sslerr = SSL_ERROR_SYSCALL;
     }
-
-    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0, "SSL_get_error: %d", sslerr);
 
     if (sslerr == SSL_ERROR_WANT_WRITE) {
 
