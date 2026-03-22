@@ -2629,7 +2629,9 @@ ngx_ssl_ocsp_cache_store(ngx_ssl_ocsp_ctx_t *ctx)
 static ngx_int_t
 ngx_ssl_ocsp_create_key(ngx_ssl_ocsp_ctx_t *ctx)
 {
+    int               n;
     u_char           *p;
+    BIGNUM           *bn;
     ASN1_INTEGER     *serial;
     const X509_NAME  *name;
 
@@ -2655,12 +2657,23 @@ ngx_ssl_ocsp_create_key(ngx_ssl_ocsp_ctx_t *ctx)
     p += 20;
 
     serial = X509_get_serialNumber(ctx->cert);
-    if (serial->length > 20) {
-        return NGX_ERROR;
+
+    bn = ASN1_INTEGER_to_BN(serial, NULL);
+    if (bn == NULL) {
+         return NGX_ERROR;
     }
 
-    p = ngx_cpymem(p, serial->data, serial->length);
-    ngx_memzero(p, 20 - serial->length);
+    if (BN_num_bytes(bn) > 20) {
+         BN_free(bn);
+         return NGX_ERROR;
+    }
+
+    n = BN_bn2bin(bn, p);
+    p += n;
+
+    ngx_memzero(p, 20 - n);
+
+    BN_free(bn);
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, ctx->log, 0,
                    "ssl ocsp key %xV", &ctx->key);
