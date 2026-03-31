@@ -646,7 +646,11 @@ ngx_mail_proxy_smtp_handler(ngx_event_t *rev)
 
         line.len = sizeof("XCLIENT ADDR= LOGIN= NAME="
                           CRLF) - 1
-                   + s->connection->addr_text.len + s->login.len + s->host.len;
+                   + s->connection->addr_text.len
+                   + s->login.len
+                   + 2 * ngx_escape_xtext(NULL, s->login.data, s->login.len)
+                   + s->host.len
+                   + 2 * ngx_escape_xtext(NULL, s->host.data, s->host.len);
 
 #if (NGX_HAVE_INET6)
         if (s->connection->sockaddr->sa_family == AF_INET6) {
@@ -675,11 +679,11 @@ ngx_mail_proxy_smtp_handler(ngx_event_t *rev)
 
         if (s->login.len && !pcf->smtp_auth) {
             p = ngx_cpymem(p, " LOGIN=", sizeof(" LOGIN=") - 1);
-            p = ngx_copy(p, s->login.data, s->login.len);
+            p = (u_char *) ngx_escape_xtext(p, s->login.data, s->login.len);
         }
 
         p = ngx_cpymem(p, " NAME=", sizeof(" NAME=") - 1);
-        p = ngx_copy(p, s->host.data, s->host.len);
+        p = (u_char *) ngx_escape_xtext(p, s->host.data, s->host.len);
 
         *p++ = CR; *p++ = LF;
 
